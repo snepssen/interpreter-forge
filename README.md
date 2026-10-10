@@ -55,7 +55,9 @@ there is speech on its far side.
     uv sync
     scripts/fetch-models.sh                       # the translation model, into models/
     scripts/make-samples.sh                       # synthetic test speech, macOS `say`
-    uv run translate-core samples/de_halting.wav  # → runs/de_halting/
+    uv run translate-core file samples/de_halting.wav       # simulated clock → runs/de_halting/
+    uv run translate-core live --from samples/de_halting.wav  # real time → runs/live-de_halting/
+    uv run translate-core live                               # your mic → your headphones
     uv run pytest
 
 Each run writes `listen.wav` (left: the speaker, right: the interpreter, placed
@@ -67,6 +69,28 @@ The harness decides exactly as it would live (the segmenter only ever sees
 audio up to *now*), measures each stage's compute for real, and lays it onto a
 clock where each stage is one worker, so queueing shows up as lag. Live, ASR
 and translation share the GPU, so treat these latencies as a lower bound.
+
+## Live
+
+`translate-core live` listens to the microphone and speaks into the default
+output; plug headphones in first, or the mic will hear the interpreter. The
+first Ctrl-C stops listening and finishes what was already heard; a second
+abandons it. Every session leaves a listen-back and trace in `runs/`.
+`--from` feeds a recording in at real-time pace instead, which is how the
+numbers below were measured: the same loop, with ASR and translation really
+competing for the GPU.
+
+MLX runs on one thread and translation goes first. A committed piece waiting
+is lag the listener hears; a delayed ASR pass only delays the next commit,
+whose translation would queue behind this one anyway. Median lag, real time,
+M1:
+
+| sample | time-sliced | translation first |
+|---|---|---|
+| Spanish, fluent | 5.2 s | 3.2 s |
+| Italian, self-correcting | 3.8 s | 3.1 s |
+| German, hesitant | 4.4 s | 3.7 s |
+| French, one run-on sentence | 8.4 s | 6.7 s |
 
 ## Falling behind
 
@@ -92,5 +116,4 @@ vor`, `kwart voor`). Held-out times in seven languages: 14 of 14.
 
 ## Not yet
 
-- Live microphone → headphones.
 - Any → any.

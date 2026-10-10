@@ -135,13 +135,16 @@ def interpret(
     return results, clips
 
 
-def render(source: np.ndarray, results: list[Result], clips: list[np.ndarray], sr: int) -> np.ndarray:
-    """Stereo listen-back: left is the speaker, right is the interpreter."""
+def render(source: np.ndarray, placed: list[tuple[float, np.ndarray]], sr: int) -> np.ndarray:
+    """Stereo listen-back: left is the speaker, right is the interpreter.
+
+    `placed` is each interpreter clip with the second it starts playing.
+    """
     left = resample(source, SAMPLE_RATE, sr)
-    length = max([len(left)] + [int(r.timing.play_end * sr) + 1 for r in results])
+    length = max([len(left)] + [int(start * sr) + len(clip) + 1 for start, clip in placed])
     out = np.zeros((length, 2), np.float32)
     out[:len(left), 0] = left
-    for r, clip in zip(results, clips):
-        i = int(r.timing.play_start * sr)
+    for start, clip in placed:
+        i = int(start * sr)
         out[i:i + len(clip), 1] += clip
     return out

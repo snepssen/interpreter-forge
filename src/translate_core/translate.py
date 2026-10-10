@@ -1,3 +1,4 @@
+from collections.abc import Generator
 from pathlib import Path
 
 from mlx_lm import load, stream_generate
@@ -41,6 +42,16 @@ class LLMTranslator:
 
     def translate(self, text: str, brief: bool = False) -> str:
         """English for `text`; `brief` asks for the gist only, to catch up a backlog."""
+        steps = self.steps(text, brief)
+        while True:
+            try:
+                next(steps)
+            except StopIteration as done:
+                return done.value
+
+    def steps(self, text: str, brief: bool = False) -> Generator[None, None, str]:
+        """`translate`, pausing after each token so a caller can interleave other
+        work on the GPU; the translation is the generator's return value."""
         text = normalise(text)
         if len(self.history) >= 2 * self.context:
             del self.history[: len(self.history) - self.context]
@@ -58,6 +69,7 @@ class LLMTranslator:
             out += r.text
             if r.finish_reason is None:
                 produced.append(r.token)
+                yield
         # The cache may run a token past what was yielded; hold it to what we know.
         self._cached = prompt + produced
         trim_prompt_cache(self._cache, self._cache[0].offset - len(self._cached))
