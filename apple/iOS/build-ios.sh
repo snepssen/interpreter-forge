@@ -32,4 +32,4 @@ echo "built: $APP ($(du -sh "$APP" | cut -f1))"
 DEVICE="$(xcrun devicectl list devices 2>/dev/null | awk '/iPhone/ && /available/ {for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-F]{8}-/) print $i}' | head -1)"
 [ -n "$DEVICE" ] || { echo "no iPhone connected and available" >&2; exit 1; }
 xcrun devicectl device install app --device "$DEVICE" "$APP"
-xcrun devicectl device process launch --device "$DEVICE" com.snepssen.interpreter >/dev/null && echo "launched on the iPhone"
+xcrun devicectl device process launch --terminate-existing --device "$DEVICE" com.snepssen.interpreter >/dev/null && echo "launched on the iPhone"
