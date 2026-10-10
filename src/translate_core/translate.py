@@ -7,6 +7,7 @@ from mlx_lm import load, stream_generate
 from mlx_lm.models.cache import make_prompt_cache, trim_prompt_cache
 
 from .clock import normalise
+from .languages import names
 
 LOCAL_MODEL = Path(__file__).resolve().parents[2] / "models" / "qwen3-4b-instruct-2507-4bit"
 DEFAULT_MODEL = str(LOCAL_MODEL) if LOCAL_MODEL.exists() else "mlx-community/Qwen3-4B-Instruct-2507-4bit"
@@ -34,8 +35,13 @@ class LLMTranslator:
     call, so the cached prefix stays valid most of the time.
     """
 
-    def __init__(self, model_id: str = DEFAULT_MODEL, context: int = 3, max_tokens: int = 256):
+    def __init__(self, model_id: str = DEFAULT_MODEL, context: int = 3, max_tokens: int = 256,
+                 languages: list[str] | None = None):
         self.model, self.tokenizer = load(model_id)
+        self.system = SYSTEM
+        if spoken := [c for c in languages or [] if c != "en"]:
+            self.system += (f"\nThe speakers use {names(spoken)}: read the transcript as that, even where "
+                            "speech recognition has spelled it oddly.")
         self.context = context
         self.history: list[tuple[str, str]] = []
         self.max_tokens = max_tokens
@@ -57,7 +63,7 @@ class LLMTranslator:
         text = normalise(text)
         if len(self.history) >= 2 * self.context:
             del self.history[: len(self.history) - self.context]
-        messages = [{"role": "system", "content": SYSTEM}]
+        messages = [{"role": "system", "content": self.system}]
         for source, target in self.history:
             messages += [{"role": "user", "content": _piece(source)}, {"role": "assistant", "content": target}]
         messages.append({"role": "user", "content": _piece(text, brief)})

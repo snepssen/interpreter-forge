@@ -29,10 +29,11 @@ same on two passes in a row, and only at a safe place:
   it can be translated on its own.
 - **pause**: silence long enough that what was said is all there is
   (1.4 s, stretched to fit a speaker who hesitates a lot).
-- **clause**: 6 s without a sentence end; cut at the latest comma the judge
+- **clause**: 4 s without a sentence end; cut at the latest comma the judge
   accepts.
-- **force**: 10 s; cut where the judge accepts, else wait, up to 15 s, then
-  cut at the widest gap.
+- **force**: 5 s; cut where the judge accepts, else wait, up to 6 s, then
+  cut at the widest gap. Each piece is translated with the ones before it as
+  context, so a thought split at 5 s still reads on.
 
 The judge is the translation LLM asked one yes/no question: *can this be
 translated correctly now, or does its meaning hang on words still to come?*
@@ -59,6 +60,7 @@ there is speech on its far side.
     uv run translate-core file recordings/*.m4a              # several at once, with a comparison table
     uv run translate-core live --from samples/de_halting.wav  # real time → runs/live-de_halting/
     uv run translate-core live                               # your mic → your headphones
+    uv run translate-core devices                            # which mics and outputs there are
     uv run pytest
 
 Each run writes `listen.wav` (left: the speaker, right: the interpreter, placed
@@ -156,6 +158,28 @@ Still wrong: Parakeet picks the language itself, and on short or noisy Polish
 it sometimes writes Russian, Spanish or Romanian; and conversational Polish
 and Hungarian come out of the ASR rough enough that some translations are
 guesses.
+
+## Languages and microphones
+
+`--languages en,pl,hu,nl` says what is spoken here. Parakeet picks the
+language by itself, and on short or noisy Polish it sometimes writes Russian,
+Spanish or Portuguese; a piece in none of the given languages is taken as
+misheard and not spoken. Signs in the text come first, because the model is
+confidently wrong about garbled Hungarian: two letters of a script none of
+the languages use (Cyrillic) turn it away; a letter that all but names one of
+them (ő, ł, ą) or an everyday word of one ("nem", "tudom", "nie", "niet")
+lets it through; distinctive letters of another (ã, ñ, ß) turn it away. Only
+then is the model asked. The translator is told the languages too. On the
+8-minute stretch it dropped three Russian pieces, an Italian and a Portuguese
+one, and no real speech; 25 of 26 test phrases right, the miss let through.
+
+Pick the microphone for the people you need translated, not for yourself.
+AirPods' microphones are built to hear the wearer and push everyone else
+down, and using them as input usually drops their playback to call quality.
+An iPhone on the table near the speakers, through Continuity, is a better
+ear, with the AirPods only for listening:
+
+    uv run translate-core live --languages en,pl,hu,nl --mic iPhone --speaker AirPods
 
 ## Clock times
 

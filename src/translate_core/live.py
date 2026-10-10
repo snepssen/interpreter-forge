@@ -153,7 +153,7 @@ class Event:
 
     segment: Segment
     translation: str = ""
-    english: bool = False  # already English: kept as context, not spoken
+    silent: str = ""  # why it isn't spoken: "english", "language" (misheard) or "echo"
     brief: bool = False
     pace: float = 1.0
     mt_start: float = 0.0
@@ -180,12 +180,12 @@ class _Job:
 class LiveInterpreter:
     def __init__(self, asr: ParakeetASR, translator: LLMTranslator, tts: PiperTTS,
                  judge: Callable[[str], bool] | None = None,
-                 english: Callable[[str], bool] | None = None,
+                 gate: Callable[[str], str] | None = None,
                  config: SegmenterConfig | None = None, backlog: Backlog | None = Backlog(),
                  on_segment: Callable[[Segment], None] = lambda s: None,
                  on_event: Callable[[Event], None] = lambda e: None):
         self.asr, self.translator, self.tts, self.judge = asr, translator, tts, judge
-        self.english = english
+        self.gate = gate
         self.config = config or SegmenterConfig()
         self.backlog = backlog
         self.on_segment, self.on_event = on_segment, on_event
@@ -257,14 +257,16 @@ class LiveInterpreter:
                     continue
 
                 if job is None and waiting:
-                    # Everything waiting goes as one: English set aside as context,
-                    # the rest merged into a single translation.
+                    # Everything waiting goes as one: what the gate turns away set
+                    # aside, the rest merged into a single translation.
                     foreign = []
                     for queued in waiting:
                         queued.mt_start = clock()
-                        if self.english and self.english(queued.segment.text):
+                        why = self.gate(queued.segment.text) if self.gate else ""
+                        if why == "english":
                             self.translator.remember(queued.segment.text)
-                            queued.english, queued.mt_end = True, clock()
+                        if why:
+                            queued.silent, queued.mt_end = why, clock()
                             self.events.append(queued)
                             self.on_event(queued)
                         else:
@@ -280,8 +282,8 @@ class LiveInterpreter:
                         next(job.steps)
                     except StopIteration as done:
                         job.event.translation, job.event.mt_end = done.value, clock()
-                        if self.english and echoes(job.event.segment.text, done.value):
-                            job.event.english = True  # garbled English, repeated: not worth saying
+                        if getattr(self.gate, "skips_english", False) and echoes(job.event.segment.text, done.value):
+                            job.event.silent = "echo"  # garbled English, repeated: not worth saying
                             self.events.append(job.event)
                             self.on_event(job.event)
                         else:

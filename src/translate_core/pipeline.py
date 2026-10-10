@@ -106,21 +106,22 @@ class Backlog:
 def interpret(
     segments: list[tuple[Segment, float]], translator: LLMTranslator, tts: PiperTTS,
     backlog: Backlog | None = Backlog(),
-    english: Callable[[str], bool] | None = None,
+    gate: Callable[[str], str] | None = None,
     merge: bool = True,
     on_result: Callable[[Result], None] = lambda r: None,
 ) -> tuple[list[Result], list[np.ndarray]]:
     """Translate and voice each segment, placing it on the playback clock.
 
-    With `english`, pieces it says are already English are not spoken, only
-    remembered as context; they still appear in the results, marked. With
-    `merge`, pieces already waiting when the translator frees up go out as one.
+    With a `gate`, pieces it turns away are not spoken: English is remembered
+    as context, misheard languages dropped; they still appear in the results,
+    marked. With `merge`, pieces already waiting when the translator frees up
+    go out as one.
     """
     results, clips = [], []
     mt_free = tts_free = play_free = 0.0
 
-    def quiet(s: Segment, t: Timing, text: str = "") -> None:
-        results.append(Result(s, text, 0.0, t, english=True))
+    def quiet(s: Segment, t: Timing, why: str, text: str = "") -> None:
+        results.append(Result(s, text, 0.0, t, silent=why))
         clips.append(np.zeros(0, np.float32))
         on_result(results[-1])
 
@@ -135,15 +136,16 @@ def interpret(
 
         foreign: list[Segment] = []
         for s, asr_ms in group:
-            if english:
+            if gate:
                 t0 = perf_counter()
-                is_english = english(s.text)
+                why = gate(s.text)
                 spent = perf_counter() - t0
-                if is_english:
+                if why == "english":
                     translator.remember(s.text)
-                    quiet(s, Timing(asr_ms=asr_ms, mt_start=start, mt_end=start + spent))
+                if why:
+                    quiet(s, Timing(asr_ms=asr_ms, mt_start=start, mt_end=start + spent), why)
                 start += spent
-                if is_english:
+                if why:
                     continue
             foreign.append(s)
         mt_free = start
@@ -156,8 +158,8 @@ def interpret(
         t0 = perf_counter()
         text = translator.translate(s.text, brief=brief)
         t.mt_end = mt_free = t.mt_start + (perf_counter() - t0)
-        if english and echoes(s.text, text):
-            quiet(s, t, text)
+        if getattr(gate, "skips_english", False) and echoes(s.text, text):
+            quiet(s, t, "echo", text)
             continue
 
         pace = backlog.pace(play_free - t.mt_end) if backlog else 1.0

@@ -54,7 +54,7 @@ class Result:
     timing: Timing = field(default_factory=Timing)
     brief: bool = False  # translated for the gist, to catch up
     pace: float = 1.0  # spoken faster than normal by this factor
-    english: bool = False  # already English: kept as context, not spoken
+    silent: str = ""  # why it isn't spoken: "english", "language" (misheard) or "echo"
 
     @property
     def lag(self) -> float:

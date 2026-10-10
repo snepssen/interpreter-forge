@@ -92,7 +92,7 @@ def test_run_on_speech_is_cut_at_the_last_comma():
 
 
 def test_comma_too_early_to_leave_a_real_piece_is_skipped():
-    s = segmenter(soft_segment=4.0)
+    s = segmenter(soft_segment=4.0, max_segment=10.0, hard_segment=15.0)  # the comma rule alone
     hyp = words("Ja, also wir haben das gemacht weil es nötig war und dann haben wir noch")
     s.step(5.0, hyp, silence=0.0)
     assert s.step(5.5, hyp, silence=0.0) == []
@@ -195,13 +195,14 @@ def test_forced_cut_prefers_the_point_the_judge_accepts():
 
 
 def test_forced_cut_waits_rather_than_cut_where_the_judge_refuses():
-    s = Segmenter(SegmenterConfig(adapt=False, soft_segment=3.0, max_segment=4.0), judge=FakeJudge())
+    s = Segmenter(SegmenterConfig(adapt=False, soft_segment=3.0, max_segment=4.0, hard_segment=6.0),
+                  judge=FakeJudge())
     hyp = words("wir haben das alles gestern gemacht weil es nötig war und dann noch so")  # 5.5 s
     s.step(6.0, hyp, silence=0.0)
     assert s.step(6.5, hyp, silence=0.0) == []
     hyp = words("wir haben das alles gestern gemacht weil es nötig war und dann noch so und weiter")  # 6.3 s
     s.step(7.0, hyp, silence=0.0)
-    [seg] = s.step(7.5, hyp, silence=0.0)  # past 1.5 x max_segment
+    [seg] = s.step(7.5, hyp, silence=0.0)  # past hard_segment
     assert seg.reason == "force"
 
 

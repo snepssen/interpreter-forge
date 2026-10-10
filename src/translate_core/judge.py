@@ -8,10 +8,12 @@ rather than the whole prompt times the vocabulary.
 """
 
 import re
+import unicodedata
 
 import mlx.core as mx
 from mlx_lm.models.cache import make_prompt_cache, trim_prompt_cache
 
+from .languages import LETTERS, SCRIPTS, WORDS, names
 from .translate import shared_prefix
 
 COMPLETE = """You decide when a simultaneous interpreter may start translating.
@@ -55,6 +57,10 @@ class YesNo:
         self._cached: list[int] = []  # the tokens the cache currently holds
 
     def __call__(self, text: str) -> bool:
+        return self.probability(text) >= 0.5
+
+    def probability(self, text: str) -> float:
+        """How sure the model is that the answer is yes, between yes and no."""
         text = text.strip()
         if self.strip_final_mark:
             text = re.sub(r"[.?!…]+$", "", text)
@@ -68,7 +74,7 @@ class YesNo:
         logits = self._head(hidden)[0, -1]
 
         yes, no = mx.max(logits[self._yes]), mx.max(logits[self._no])
-        return bool((yes > no).item())
+        return float(mx.sigmoid(yes - no).item())
 
     def _head(self, hidden: mx.array) -> mx.array:
         if getattr(self.model.args, "tie_word_embeddings", False):
@@ -102,3 +108,56 @@ class EnglishCheck:
 def _token_ids(tokenizer, words: tuple[str, ...]) -> mx.array:
     """First token of each spelling; the model's answer starts with one of them."""
     return mx.array(sorted({tokenizer.encode(w, add_special_tokens=False)[0] for w in words}))
+
+
+EXPECTED = """You check transcribed speech for a live interpreter. The people speaking use {names}.
+Speech recognition sometimes writes their speech down in the wrong language: Polish heard as Russian, Spanish or Romanian, for example.
+Answer yes if the text is in {names}; a few words of another language mixed in is fine.
+Answer no if it is mainly in some other language.
+
+Answer with one word: yes or no."""
+
+
+class Gate:
+    """Before translating: does this piece need it?
+
+    Returns "" to translate it, "english" if it is already English (the
+    listener understands it), or "language" if it isn't in any language
+    expected here, which means the speech recognition went astray.
+
+    Dropping real speech is the worse mistake, so the evidence that a piece
+    is in an expected language is looked at before the model is asked: the
+    model is sure garbled Hungarian is not Hungarian.
+    """
+
+    def __init__(self, model, tokenizer, english: bool = True, languages: list[str] | None = None):
+        self._english = EnglishCheck(model, tokenizer) if english else None
+        self.skips_english = english  # then a translation that just repeats its source is noise too
+        self.languages = languages or []
+        self._expected = YesNo(model, tokenizer, EXPECTED.format(names=names(languages))) if languages else None
+
+    def __call__(self, text: str) -> str:
+        if self._english and self._english(text):
+            return "english"
+        if self._expected and not self._expected_language(text):
+            return "language"
+        return ""
+
+    def _expected_language(self, text: str) -> bool:
+        verdict = evidence(text, self.languages)
+        return self._expected(text) if verdict is None else verdict
+
+
+def evidence(text: str, languages: list[str]) -> bool | None:
+    """What the text itself says about being in one of `languages`: True, False,
+    or None when it doesn't say and the model has to be asked."""
+    scripts = {SCRIPTS.get(c, "LATIN") for c in languages}
+    letters = [ch for ch in text.lower() if ch.isalpha()]
+    if sum(unicodedata.name(ch, "").split(" ")[0] not in scripts for ch in letters) >= 2:
+        return False  # Cyrillic for Polish, say
+    words = set(re.findall(r"\w+", text.lower()))
+    if any(set(LETTERS.get(c, "")) & set(letters) or WORDS.get(c, set()) & words for c in languages):
+        return True
+    if any(set(LETTERS[c]) & set(letters) for c in LETTERS if c not in languages):
+        return False  # ã, ñ, ß... and nothing of ours
+    return None

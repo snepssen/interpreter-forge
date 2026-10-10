@@ -18,7 +18,7 @@ passes, and only at a point where cutting is safe:
   clause    a long run without a sentence end; cut at its latest comma, if
             the judge agrees the words before it stand alone.
   force     longer still; cut where the judge accepts (all of it, a comma, a
-            wide gap). If it accepts nothing, wait, up to 1.5x as long, then
+            wide gap). If it accepts nothing, wait, up to hard_segment, then
             cut at the widest gap rather than let lag grow without bound.
 
 The long pause stretches to fit the speaker: the gaps inside committed
@@ -59,8 +59,9 @@ class SegmenterConfig:
     hop: float = 0.5  # seconds of audio between ASR passes
     left_context: float = 0.5  # committed audio re-fed ahead of the mark
     long_pause: float = 1.4  # silence that commits everything said so far
-    soft_segment: float = 6.0  # uncommitted speech past which a comma will do
-    max_segment: float = 10.0  # uncommitted speech that forces a cut anywhere
+    soft_segment: float = 4.0  # uncommitted speech past which a comma will do
+    max_segment: float = 5.0  # uncommitted speech that forces a cut the judge accepts
+    hard_segment: float = 6.0  # uncommitted speech that forces a cut, accepted or not
     min_words: int = 3  # shorter sentences wait to join the next one
     adapt: bool = True  # stretch the long pause to the speaker's hesitations
     max_long_pause: float = 3.0  # ceiling on the adapted long pause
@@ -162,7 +163,7 @@ class Segmenter:
             # No cut it accepts: better late than wrong, up to the cap below.
             if cut := self._first_complete(words, [stable] + cuts):
                 return cut, "force"
-        if span >= c.max_segment * 1.5:  # never settles: cut what we have
+        if span >= c.hard_segment:  # never settles, or nothing acceptable: cut what we have
             cuts = _clause_cuts(words, len(words)) + _gap_cuts(words, len(words))
             return (cuts[0] if cuts else len(words)), "force"
 

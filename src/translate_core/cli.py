@@ -29,6 +29,8 @@ def main() -> None:
     live.add_argument("--mic", help="input device (index or name); default: the system's")
     live.add_argument("--speaker", help="output device (index or name); default: the system's")
 
+    sub.add_parser("devices", help="list microphones and outputs")
+
     for s in (f, live):
         s.add_argument("--out", type=Path, help="run directory (default: runs/<name>; with several inputs, the parent)")
         s.add_argument("--asr", default=ASR_MODEL)
@@ -37,15 +39,42 @@ def main() -> None:
         s.add_argument("--no-judge", action="store_true", help="segment on acoustics and punctuation alone")
         s.add_argument("--no-catch-up", action="store_true", help="never condense or speed up when behind")
         s.add_argument("--speak-english", action="store_true", help="also voice speech that is already English")
+        s.add_argument("--languages", type=_languages, metavar="en,pl,hu",
+                       help="languages spoken here; anything else is taken as misheard and not spoken")
         d = SegmenterConfig()
         s.add_argument("--hop", type=float, default=d.hop)
         s.add_argument("--long-pause", type=float, default=d.long_pause)
-        s.add_argument("--max-segment", type=float, default=d.max_segment)
+        s.add_argument("--max-segment", type=float, default=d.max_segment,
+                       help="seconds of speech by which a piece is cut, if the judge accepts a point")
+        s.add_argument("--hard-segment", type=float, default=d.hard_segment,
+                       help="seconds of speech by which a piece is cut regardless")
         s.add_argument("--no-adapt", action="store_true")
 
     a = p.parse_args()
-    a.config = SegmenterConfig(hop=a.hop, long_pause=a.long_pause, max_segment=a.max_segment, adapt=not a.no_adapt)
+    if a.command == "devices":
+        return list_devices()
+    soft = min(SegmenterConfig.soft_segment, a.max_segment)
+    a.config = SegmenterConfig(hop=a.hop, long_pause=a.long_pause, soft_segment=soft, max_segment=a.max_segment,
+                               hard_segment=max(a.hard_segment, a.max_segment), adapt=not a.no_adapt)
     (run_file if a.command == "file" else run_live)(a)
+
+
+def _languages(value: str) -> list[str]:
+    from .languages import LANGUAGES
+    codes = [c.strip().lower() for c in value.split(",") if c.strip()]
+    if unknown := [c for c in codes if c not in LANGUAGES]:
+        raise argparse.ArgumentTypeError(f"unknown {', '.join(unknown)}; one of {', '.join(LANGUAGES)}")
+    return codes
+
+
+def list_devices() -> None:
+    import sounddevice as sd
+    default_in, default_out = sd.default.device
+    for i, d in enumerate(sd.query_devices()):
+        kinds = [k for k, n in (("mic", d["max_input_channels"]), ("output", d["max_output_channels"])) if n]
+        marks = [m for m, on in (("default mic", i == default_in), ("default output", i == default_out)) if on]
+        print(f"{i:3}  {d['name']:<40} {'/'.join(kinds):<11} {int(d['default_samplerate'])} Hz"
+              + (f"  ({', '.join(marks)})" if marks else ""))
 
 
 # -- shared -------------------------------------------------------------------
@@ -54,7 +83,7 @@ def load_models(a, need_translator: bool = True):
     import numpy as np
 
     from .asr import ParakeetASR
-    from .judge import CompletenessJudge, EnglishCheck
+    from .judge import CompletenessJudge, Gate
     from .translate import LLMTranslator
     from .tts import PiperTTS
 
@@ -62,22 +91,22 @@ def load_models(a, need_translator: bool = True):
     asr = ParakeetASR(a.asr)
     asr.transcribe(np.zeros(audio.SAMPLE_RATE, np.float32))  # first call compiles kernels
 
-    translator = judge = english = tts = None
+    translator = judge = gate = tts = None
     if need_translator or not a.no_judge:
         info(f"loading {a.mt}")
-        translator = LLMTranslator(a.mt)
+        translator = LLMTranslator(a.mt, languages=a.languages)
         translator.translate("Hallo.")  # warm-up
         translator.reset()
     if not a.no_judge:
         judge = CompletenessJudge(translator.model, translator.tokenizer)
         judge("Hallo")  # fills the cache with its instructions
     if need_translator:
-        if not a.speak_english:
-            english = EnglishCheck(translator.model, translator.tokenizer)
-            english("Hello")  # fills the cache with its instructions
+        if not a.speak_english or a.languages:
+            gate = Gate(translator.model, translator.tokenizer, english=not a.speak_english, languages=a.languages)
+            gate("Hello")  # fills the caches with their instructions
         tts = PiperTTS(a.voice)
         tts.speak("Ready.")
-    return asr, translator, judge, english, tts
+    return asr, translator, judge, gate, tts
 
 
 def backlog(a):
@@ -87,6 +116,13 @@ def backlog(a):
 
 def device(value: str | None) -> int | str | None:
     return int(value) if value and value.isdigit() else value
+
+
+SILENT = {
+    "english": "English, kept as context",
+    "echo": "garbled English repeated back, not spoken",
+    "language": "not a language spoken here: misheard, not spoken",
+}
 
 
 def info(msg: str) -> None:
@@ -104,7 +140,7 @@ def run_file(a) -> None:
     from .pipeline import interpret, render, segment
     from .vad import SileroVAD
 
-    asr, translator, judge, english, tts = load_models(a, need_translator=not a.segment_only)
+    asr, translator, judge, gate, tts = load_models(a, need_translator=not a.segment_only)
     table = []
     for path in a.inputs:
         out = (a.out / path.stem if len(a.inputs) > 1 else a.out) if a.out else Path("runs") / path.stem
@@ -118,7 +154,7 @@ def run_file(a) -> None:
 
         info("interpreting")
         translator.reset()
-        results, clips = interpret(segments, translator, tts, backlog(a), english, on_result=show_result)
+        results, clips = interpret(segments, translator, tts, backlog(a), gate, on_result=show_result)
 
         placed = [(r.timing.play_start, clip) for r, clip in zip(results, clips)]
         audio.write(out / "listen.wav", render(source, placed, tts.sample_rate), tts.sample_rate)
@@ -129,7 +165,7 @@ def run_file(a) -> None:
         (out / "summary.txt").write_text(summary + "\n")
         print("\n" + summary + "\n")
         info(f"wrote {out}/listen.wav (L: speaker, R: interpreter), trace.jsonl, summary.txt")
-        if spoken := [r for r in results if not r.english]:
+        if spoken := [r for r in results if not r.silent]:
             lags = [lag for r in spoken for lag in r.lags]
             table.append((path.name, seconds, len(spoken), statistics.median(lags), max(lags)))
 
@@ -147,8 +183,8 @@ def show_segment(s: Segment, asr_ms: float) -> None:
 
 def show_result(r: Result) -> None:
     t = r.timing
-    if r.english:
-        print(f"  #{r.segment.index:<3} English, kept as context", flush=True)
+    if r.silent:
+        print(f"  #{r.segment.index:<3} {SILENT[r.silent]}", flush=True)
         return
     print(f"  #{r.segment.index:<3} mt {(t.mt_end - t.mt_start) * 1000:5.0f}ms  "
           f"tts {(t.tts_end - t.tts_start) * 1000:4.0f}ms  "
@@ -161,18 +197,18 @@ def trace(r: Result) -> dict:
     return {
         "index": s.index, "reason": s.reason, "start": s.start, "end": s.end,
         "decided_at": s.decided_at, "parts": s.parts, "source": s.text, "translation": r.translation,
-        "english": r.english, "audio_seconds": r.audio_seconds,
-        "lag": None if r.english else r.lag, "brief": r.brief, "pace": r.pace,
+        "silent": r.silent, "audio_seconds": r.audio_seconds,
+        "lag": None if r.silent else r.lag, "brief": r.brief, "pace": r.pace,
         **asdict(r.timing),
         "words": [asdict(w) for w in s.words],
     }
 
 
 def summarise(results: list[Result], duration: float) -> str:
-    english = sum(r.english for r in results)
-    results = [r for r in results if not r.english]
+    quiet = {why: sum(r.silent == why for r in results) for why in SILENT}
+    results = [r for r in results if not r.silent]
     if not results:
-        return f"nothing to interpret ({english} English pieces)"
+        return f"nothing to interpret ({quiet['english']} English pieces)"
     lags = [lag for r in results for lag in r.lags]
     waits = [r.segment.decided_at - r.segment.end for r in results]
     queued = [r.timing.play_start - r.timing.tts_end for r in results]
@@ -180,7 +216,8 @@ def summarise(results: list[Result], duration: float) -> str:
     reasons = {k: sum(r.segment.reason == k for r in results)
                for k in ("sentence", "judged", "pause", "clause", "force", "flush")}
     return "\n".join([
-        f"segments      {len(results)} spoken ({len(lags)} pieces)  ({', '.join(f'{k} {v}' for k, v in reasons.items() if v)}), {english} English",
+        f"segments      {len(results)} spoken ({len(lags)} pieces)  ({', '.join(f'{k} {v}' for k, v in reasons.items() if v)})",
+        f"not spoken    {quiet['english']} English, {quiet['echo']} echoes, {quiet['language']} misheard language",
         f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (each piece's end → playback start)",
         f"commit wait   median {statistics.median(waits):.1f} s  (segment end → decision)",
         f"asr pass      mean {statistics.mean(r.timing.asr_ms for r in results):.0f} ms",
@@ -202,7 +239,7 @@ def run_live(a) -> None:
 
     name = f"live-{a.input.stem}" if a.input else time.strftime("live-%Y%m%d-%H%M%S")
     out = a.out or Path("runs") / name
-    asr, translator, judge, english, tts = load_models(a)
+    asr, translator, judge, gate, tts = load_models(a)
 
     heard: list[np.ndarray] = []
     if a.input:
@@ -217,13 +254,13 @@ def run_live(a) -> None:
         print(f"[{s.start:6.2f}–{s.end:6.2f}] {s.reason:<8} │ {s.text}", flush=True)
 
     def show_event(e: Event) -> None:
-        if e.english:
-            print(f"  #{e.segment.index:<3} English, kept as context", flush=True)
+        if e.silent:
+            print(f"  #{e.segment.index:<3} {SILENT[e.silent]}", flush=True)
             return
         print(f"  #{e.segment.index:<3} mt {(e.mt_end - e.mt_start) * 1000:5.0f}ms  plays {e.play_start:6.2f}s  "
               f"lag {e.lag:4.1f}s{catch_up(e.brief, e.pace)}  → {e.translation}", flush=True)
 
-    interpreter = LiveInterpreter(asr, translator, tts, judge, english, a.config, backlog(a),
+    interpreter = LiveInterpreter(asr, translator, tts, judge, gate, a.config, backlog(a),
                                   on_segment=show_live_segment, on_event=show_event)
     stop = threading.Event()
     info("listening; Ctrl-C to stop" if not a.input else f"playing {a.input.name} in real time")
@@ -238,17 +275,17 @@ def run_live(a) -> None:
     with open(out / "trace.jsonl", "w") as fh:
         for e in events:
             fh.write(json.dumps({
-                "index": e.segment.index, "reason": e.segment.reason, "english": e.english,
+                "index": e.segment.index, "reason": e.segment.reason, "silent": e.silent,
                 "start": e.segment.start,
                 "end": e.segment.end, "source": e.segment.text, "translation": e.translation,
                 "brief": e.brief, "pace": e.pace, "mt_start": e.mt_start, "mt_end": e.mt_end,
                 "play_start": e.play_start, "play_seconds": e.play_seconds,
-                "lag": None if e.english else e.lag,
+                "lag": None if e.silent else e.lag,
             }, ensure_ascii=False) + "\n")
-    if spoken := [e for e in events if not e.english]:
+    if spoken := [e for e in events if not e.silent]:
         lags = [lag for e in spoken for lag in e.lags]
         summary = "\n".join([
-            f"segments      {len(spoken)} spoken ({len(lags)} pieces), {len(events) - len(spoken)} English",
+            f"segments      {len(spoken)} spoken ({len(lags)} pieces), {len(events) - len(spoken)} not spoken",
             f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (each piece's end → playback start)",
             f"translate     mean {statistics.mean(e.mt_end - e.mt_start for e in spoken) * 1000:.0f} ms  (wall, interleaved with listening)",
             f"catching up   {sum(e.brief for e in spoken)} brief, {sum(e.pace > 1 for e in spoken)} faster",
