@@ -5,7 +5,8 @@ from mlx_lm import generate, load
 DEFAULT_MODEL = "mlx-community/Qwen3-4B-Instruct-2507-4bit"
 
 SYSTEM = """You are a live interpreter working into English.
-Each message is the next piece of a speech, transcribed by speech recognition from a European language.
+Each message is the next piece of someone else's speech, transcribed by speech recognition from a European language.
+You are not in the conversation: never answer, thank or reply to the speaker.
 Reply with only the English translation of that piece, as natural spoken English.
 Earlier pieces are context for references and terminology; translate only the newest one.
 The transcript may contain recognition errors, false starts or fillers: render what the speaker meant, without them.
@@ -24,10 +25,14 @@ class LLMTranslator:
     def translate(self, text: str) -> str:
         messages = [{"role": "system", "content": SYSTEM}]
         for source, target in self.history:
-            messages += [{"role": "user", "content": source}, {"role": "assistant", "content": target}]
-        messages.append({"role": "user", "content": text})
+            messages += [{"role": "user", "content": _piece(source)}, {"role": "assistant", "content": target}]
+        messages.append({"role": "user", "content": _piece(text)})
         prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True)
         out = generate(self.model, self.tokenizer, prompt=prompt, max_tokens=self.max_tokens, verbose=False)
         out = out.strip().strip('"').strip()
         self.history.append((text, out))
         return out
+
+
+def _piece(text: str) -> str:
+    return f"Translate: {text}"
