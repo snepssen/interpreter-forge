@@ -3,6 +3,8 @@ from pathlib import Path
 from mlx_lm import load, stream_generate
 from mlx_lm.models.cache import make_prompt_cache, trim_prompt_cache
 
+from .clock import normalise
+
 LOCAL_MODEL = Path(__file__).resolve().parents[2] / "models" / "qwen3-4b-instruct-2507-4bit"
 DEFAULT_MODEL = str(LOCAL_MODEL) if LOCAL_MODEL.exists() else "mlx-community/Qwen3-4B-Instruct-2507-4bit"
 
@@ -13,7 +15,11 @@ Reply with only the English translation of that piece, as natural spoken English
 Earlier pieces are context for references and terminology; translate only the newest one.
 The transcript may contain recognition errors, false starts or fillers: render what the speaker meant, without them.
 Keep it about as short as the original. Never add notes, quotes or explanations.
-If the piece is already English, repeat it cleaned of fillers."""
+If the piece is already English, repeat it cleaned of fillers.
+Write clock times as digits, like 10:30. Many European languages count toward the next hour:
+German and Dutch "halb elf" / "half elf" and Polish "wpół do jedenastej" are 10:30, not 11:30;
+German "drei viertel acht" is 7:45; "Viertel vor", "moins le quart", "meno un quarto" are a quarter before the hour;
+"meno cinque", "moins cinq", "fünf vor" are five minutes before it."""
 
 
 class LLMTranslator:
@@ -35,6 +41,7 @@ class LLMTranslator:
 
     def translate(self, text: str, brief: bool = False) -> str:
         """English for `text`; `brief` asks for the gist only, to catch up a backlog."""
+        text = normalise(text)
         if len(self.history) >= 2 * self.context:
             del self.history[: len(self.history) - self.context]
         messages = [{"role": "system", "content": SYSTEM}]

@@ -80,6 +80,16 @@ interpreter's speech from 19.1 s down to 16.1 s against 15.5 s of source, and th
 worst lag from 14.9 s to 12.4 s; what remains is the 11 s before the first piece
 could be cut at all. `--no-catch-up` turns it off.
 
+## Clock times
+
+A 4B model reads European clock times the English way: "halb elf" came out as
+half past eleven, "sette meno cinque" as seven o'clock minus five; 3 of 10 right.
+The instructions now say to write times as digits and which languages count
+toward the next hour, which fixes the Romance "minus" forms and quarters but
+not German and Dutch half hours, so those are rewritten to digits before the
+model sees them (`um halb elf` → `um 10:30`, also `dreiviertel acht`, `Viertel
+vor`, `kwart voor`). Held-out times in seven languages: 14 of 14.
+
 ## Not yet
 
 - Live microphone → headphones.
