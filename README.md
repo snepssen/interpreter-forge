@@ -129,6 +129,12 @@ Polish and Hungarian (58–66 min):
 | lag of spoken pieces, median / max | 10.9 / 18.1 s | 5.0 / 10.8 s |
 | forced cuts | 17 | 0 |
 
+Over the whole 70 minutes, the same changes took the median lag of spoken
+pieces from 7.8 to 3.9 s (p90 14.1 → 7.1 s, worst 24.9 → 12.8 s) and forced
+cuts from 75 to 11; ASR passes got twice as fast (0.77 → 0.39 s) because
+quicker commits keep the windows short. 916 of 1,022 pieces were English and
+stayed quiet.
+
 - **Agreement is aligned word by word**, not a common prefix. In a long
   window of conversation some early word nearly always flickers, and a prefix
   rule held back everything after it. Now a prefix is stable when its last
