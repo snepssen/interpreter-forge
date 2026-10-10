@@ -6,7 +6,7 @@ Words are only committed once they have come out the same on two consecutive
 passes, and only at a point where cutting is safe:
 
   sentence  a sentence-final mark with recognised speech after it, on both
-            passes. Parakeet ends every window it is given with a full stop,
+            passes (aligned word by word; 80% of what precedes must agree). Parakeet ends every window it is given with a full stop,
             and a hesitation mid-clause is enough to earn one ("dass wir.");
             once the speaker carries on, the re-read across the pause drops it.
             So a mark only counts when there is speech on its far side.
@@ -28,6 +28,7 @@ sentences tell us how long this person hesitates mid-thought.
 import re
 from collections import deque
 from collections.abc import Callable
+from difflib import SequenceMatcher
 from dataclasses import dataclass
 
 import numpy as np
@@ -38,6 +39,7 @@ SENTENCE_END = (".", "?", "!")
 TRAILING_OFF = ("...", "…")  # the speaker tailing away, not finishing
 CLAUSE_END = (",", ";", ":", "—", "–")
 TIMING_SLOP = 0.12  # ASR word times wander about this much between passes
+STABLE_SHARE = 0.8  # of a prefix's words that must agree with the last pass
 
 
 def ends_sentence(text: str) -> bool:
@@ -109,13 +111,16 @@ class Segmenter:
         the VAD has heard no speech, as of `now`.
         """
         segments: list[Segment] = []
-        stable = _common_prefix(self._previous, words)
+        agreed = _agreed(self._previous, words)
         while words:
-            cut, reason = self._decide(words, stable, silence)
+            # The VAD can go on hearing "speech" (noise, a faint voice) long
+            # after the last word anyone could transcribe; that is a pause too.
+            heard_gap = now - words[-1].end
+            cut, reason = self._decide(words, agreed, silence, heard_gap)
             if cut == 0:
                 break
             segments.append(self._commit(words[:cut], reason, now))
-            words, stable = words[cut:], max(0, stable - cut)
+            words, agreed = words[cut:], agreed[cut:]
         self._previous = list(words)
         return segments
 
@@ -129,13 +134,17 @@ class Segmenter:
         if not self._previous:
             self.mark = max(self.mark, now - self.config.left_context)
 
-    def _decide(self, words: list[Word], stable: int, silence: float) -> tuple[int, str]:
-        if silence >= self.long_pause_threshold():
+    def _decide(self, words: list[Word], agreed: list[bool], silence: float,
+                heard_gap: float = 0.0) -> tuple[int, str]:
+        if max(silence, heard_gap) >= self.long_pause_threshold():
             return len(words), "pause"
 
-        # Latest sentence end with stable speech after it.
+        # Latest sentence end with stable speech after it: the mark and the
+        # word beyond it both heard the same on both passes.
+        stable = _stable(agreed)
         for i in range(stable - 2, -1, -1):
-            if ends_sentence(words[i].text) and i + 1 >= self.config.min_words:
+            if (ends_sentence(words[i].text) and agreed[i] and agreed[i + 1]
+                    and i + 1 >= self.config.min_words):
                 return i + 1, "sentence"
 
         c = self.config
@@ -187,13 +196,31 @@ class Segmenter:
         return segment
 
 
-def _common_prefix(a: list[Word], b: list[Word]) -> int:
-    n = 0
-    for x, y in zip(a, b):
-        if _key(x) != _key(y):
-            break
-        n += 1
-    return n
+def _agreed(previous: list[Word], words: list[Word]) -> list[bool]:
+    """Which of `words` the previous pass also heard, aligned word by word.
+
+    Alignment rather than a common prefix: in a long window of conversation
+    some early word nearly always flickers ("yeah, yeah" / "yeah yeah yeah"),
+    and a prefix rule then holds back everything after it.
+    """
+    matcher = SequenceMatcher(None, [_key(w) for w in previous], [_key(w) for w in words], autojunk=False)
+    agreed = [False] * len(words)
+    for _, j, n in matcher.get_matching_blocks():
+        agreed[j:j + n] = [True] * n
+    return agreed
+
+
+def _stable(agreed: list[bool]) -> int:
+    """Longest prefix ending on an agreed word with STABLE_SHARE of its words agreed.
+
+    What flickered inside it is committed as heard last, with the most context.
+    """
+    best = count = 0
+    for n, ok in enumerate(agreed, 1):
+        count += ok
+        if ok and count >= STABLE_SHARE * n:
+            best = n
+    return best
 
 
 def _clause_cuts(words: list[Word], stable: int) -> list[int]:

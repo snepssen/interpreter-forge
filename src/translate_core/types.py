@@ -18,6 +18,7 @@ class Segment:
     words: list[Word]
     reason: str  # "sentence", "judged", "pause", "clause", "force" or "flush"
     decided_at: float  # stream time at which the commit decision existed
+    parts: list[float] = field(default_factory=list)  # if merged: where each piece in it ended
 
     @property
     def text(self) -> str:
@@ -59,3 +60,8 @@ class Result:
     def lag(self) -> float:
         """Ear-voice span: source segment ends -> its translation starts playing."""
         return self.timing.play_start - self.segment.end
+
+    @property
+    def lags(self) -> list[float]:
+        """The ear-voice span of every piece in it, if pieces were merged."""
+        return [self.timing.play_start - end for end in self.segment.parts or [self.segment.end]]

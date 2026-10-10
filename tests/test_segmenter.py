@@ -51,9 +51,9 @@ def test_case_and_comma_flicker_still_counts_as_stable():
 
 def test_mid_sentence_hesitation_waits():
     s = segmenter()
-    hyp = words("Also ich wollte eigentlich")
-    s.step(2.0, hyp, silence=0.0)
-    assert s.step(3.0, hyp, silence=1.0) == []  # longer than `pause`, shorter than `long_pause`
+    hyp = words("Also ich wollte eigentlich")  # ends at 1.5 s
+    s.step(2.0, hyp, silence=0.5)
+    assert s.step(2.5, hyp, silence=1.0) == []  # a hesitation, shorter than `long_pause`
 
 
 def test_long_pause_commits_everything():
@@ -169,10 +169,10 @@ def test_judge_is_not_asked_about_unstable_words_or_twice_about_the_same():
     s = Segmenter(SegmenterConfig(adapt=False), judge=judge)
     s.step(2.5, words("dass wir morgen"), silence=0.5)
     assert judge.asked == []
-    hyp = words("dass wir morgen nicht")
-    s.step(3.0, hyp, silence=0.5)
-    s.step(3.5, hyp, silence=0.5)
-    s.step(4.0, hyp, silence=0.6)
+    hyp = words("dass wir morgen nicht")  # ends at 1.5 s
+    s.step(2.0, hyp, silence=0.5)
+    s.step(2.0, hyp, silence=0.5)
+    s.step(2.1, hyp, silence=0.6)
     assert judge.asked == ["dass wir morgen nicht"]
 
 
@@ -203,3 +203,24 @@ def test_forced_cut_waits_rather_than_cut_where_the_judge_refuses():
     s.step(7.0, hyp, silence=0.0)
     [seg] = s.step(7.5, hyp, silence=0.0)  # past 1.5 x max_segment
     assert seg.reason == "force"
+
+
+def test_an_early_flicker_does_not_hold_back_a_later_sentence_end():
+    s = segmenter()
+    s.step(3.0, words("Yeah yeah okay so we went home and slept. And then"), silence=0.0)
+    [seg] = s.step(3.5, words("Yeah yeah yeah okay so we went home and slept. And then"), silence=0.0)
+    assert seg.text == "Yeah yeah yeah okay so we went home and slept."
+
+
+def test_a_mostly_rewritten_window_is_not_stable():
+    s = segmenter()
+    s.step(3.0, words("Ich habe gestern das Auto. Und dann"), silence=0.0)
+    assert s.step(3.5, words("Mich hat gestern der Hund. Und dann"), silence=0.0) == []
+
+
+def test_a_long_gap_after_the_last_word_is_a_pause_whatever_the_vad_hears():
+    s = segmenter()
+    hyp = words("Nem tudom")  # ends at 0.7 s
+    s.step(1.0, hyp, silence=0.0)
+    [seg] = s.step(2.5, hyp, silence=0.0)  # VAD still "hears speech"
+    assert seg.reason == "pause"

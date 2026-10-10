@@ -116,6 +116,41 @@ context, so replies to them translate better. 17 of 18 right on real and
 held-out phrases; the miss was English heard as foreign, which only costs a
 needless repeat. `--speak-english` voices everything.
 
+## Real conversation
+
+A 70-minute recording of English, Polish, Hungarian and some Dutch, mostly
+two or three people talking over each other, behaved nothing like the
+synthetic samples. What it changed, measured on an 8-minute stretch of fast
+Polish and Hungarian (58–66 min):
+
+| | before | after |
+|---|---|---|
+| commit wait, median / p90 | 5.3 / 12.8 s | 2.5 / 3.7 s |
+| lag of spoken pieces, median / max | 10.9 / 18.1 s | 5.0 / 10.8 s |
+| forced cuts | 17 | 0 |
+
+- **Agreement is aligned word by word**, not a common prefix. In a long
+  window of conversation some early word nearly always flickers, and a prefix
+  rule held back everything after it. Now a prefix is stable when its last
+  word and 80% of its words agree with the last pass.
+- **A pause is also measured from the last word transcribed.** The VAD went
+  on hearing "speech" (noise, a faint voice) for half a minute after a
+  two-word "Nem tudom", and nothing got cut.
+- **Garbled English isn't spoken back.** Accented English the ASR mangles
+  fails the English check, and the model then repeats it; 40 of 101
+  "translations" in the full recording were that. A translation that is
+  mostly its source again (≥ 0.6 word similarity) now stays quiet. No real
+  translation came near that.
+- **Waiting pieces go out together**, English set aside, the rest translated
+  as one. Rarely needed once commits were quick.
+- **MLX's buffer cache is capped at 1 GB.** Variable-length ASR windows had
+  grown it to 9 GB within 90 seconds and put the machine in swap.
+
+Still wrong: Parakeet picks the language itself, and on short or noisy Polish
+it sometimes writes Russian, Spanish or Romanian; and conversational Polish
+and Hungarian come out of the ASR rough enough that some translations are
+guesses.
+
 ## Clock times
 
 A 4B model reads European clock times the English way: "halb elf" came out as

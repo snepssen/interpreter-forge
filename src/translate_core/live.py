@@ -25,9 +25,9 @@ import numpy as np
 
 from .asr import ParakeetASR
 from .audio import SAMPLE_RATE
-from .pipeline import Backlog
+from .pipeline import Backlog, combine
 from .segmenter import Segmenter, SegmenterConfig
-from .translate import LLMTranslator
+from .translate import LLMTranslator, echoes
 from .tts import PiperTTS
 from .types import Segment
 from .vad import SileroVAD
@@ -165,6 +165,11 @@ class Event:
     def lag(self) -> float:
         return self.play_start - self.segment.end
 
+    @property
+    def lags(self) -> list[float]:
+        """The ear-voice span of every piece in it, if pieces were merged."""
+        return [self.play_start - end for end in self.segment.parts or [self.segment.end]]
+
 
 @dataclass
 class _Job:
@@ -252,14 +257,22 @@ class LiveInterpreter:
                     continue
 
                 if job is None and waiting:
-                    event = waiting.pop(0)
-                    event.mt_start = clock()
-                    if self.english and self.english(event.segment.text):
-                        self.translator.remember(event.segment.text)
-                        event.english, event.mt_end = True, clock()
-                        self.events.append(event)
-                        self.on_event(event)
+                    # Everything waiting goes as one: English set aside as context,
+                    # the rest merged into a single translation.
+                    foreign = []
+                    for queued in waiting:
+                        queued.mt_start = clock()
+                        if self.english and self.english(queued.segment.text):
+                            self.translator.remember(queued.segment.text)
+                            queued.english, queued.mt_end = True, clock()
+                            self.events.append(queued)
+                            self.on_event(queued)
+                        else:
+                            foreign.append(queued.segment)
+                    waiting = []
+                    if not foreign:
                         continue
+                    event = Event(combine(foreign), mt_start=clock())
                     event.brief = bool(self.backlog) and self.backlog.brief(player.backlog())
                     job = _Job(event, self.translator.steps(event.segment.text, event.brief))
                 if job is not None:
@@ -267,7 +280,12 @@ class LiveInterpreter:
                         next(job.steps)
                     except StopIteration as done:
                         job.event.translation, job.event.mt_end = done.value, clock()
-                        speech.put(job.event)
+                        if self.english and echoes(job.event.segment.text, done.value):
+                            job.event.english = True  # garbled English, repeated: not worth saying
+                            self.events.append(job.event)
+                            self.on_event(job.event)
+                        else:
+                            speech.put(job.event)
                         job = None
                     continue
 

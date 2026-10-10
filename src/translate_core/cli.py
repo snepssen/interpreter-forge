@@ -130,7 +130,7 @@ def run_file(a) -> None:
         print("\n" + summary + "\n")
         info(f"wrote {out}/listen.wav (L: speaker, R: interpreter), trace.jsonl, summary.txt")
         if spoken := [r for r in results if not r.english]:
-            lags = [r.lag for r in spoken]
+            lags = [lag for r in spoken for lag in r.lags]
             table.append((path.name, seconds, len(spoken), statistics.median(lags), max(lags)))
 
     if len(table) > 1:
@@ -160,7 +160,7 @@ def trace(r: Result) -> dict:
     s = r.segment
     return {
         "index": s.index, "reason": s.reason, "start": s.start, "end": s.end,
-        "decided_at": s.decided_at, "source": s.text, "translation": r.translation,
+        "decided_at": s.decided_at, "parts": s.parts, "source": s.text, "translation": r.translation,
         "english": r.english, "audio_seconds": r.audio_seconds,
         "lag": None if r.english else r.lag, "brief": r.brief, "pace": r.pace,
         **asdict(r.timing),
@@ -173,15 +173,15 @@ def summarise(results: list[Result], duration: float) -> str:
     results = [r for r in results if not r.english]
     if not results:
         return f"nothing to interpret ({english} English pieces)"
-    lags = [r.lag for r in results]
+    lags = [lag for r in results for lag in r.lags]
     waits = [r.segment.decided_at - r.segment.end for r in results]
     queued = [r.timing.play_start - r.timing.tts_end for r in results]
     ms = lambda xs: f"{statistics.mean(xs) * 1000:.0f} ms"  # noqa: E731
     reasons = {k: sum(r.segment.reason == k for r in results)
                for k in ("sentence", "judged", "pause", "clause", "force", "flush")}
     return "\n".join([
-        f"segments      {len(results)} interpreted  ({', '.join(f'{k} {v}' for k, v in reasons.items() if v)}), {english} English",
-        f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (source segment end → playback start)",
+        f"segments      {len(results)} spoken ({len(lags)} pieces)  ({', '.join(f'{k} {v}' for k, v in reasons.items() if v)}), {english} English",
+        f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (each piece's end → playback start)",
         f"commit wait   median {statistics.median(waits):.1f} s  (segment end → decision)",
         f"asr pass      mean {statistics.mean(r.timing.asr_ms for r in results):.0f} ms",
         f"translate     mean {ms([r.timing.mt_end - r.timing.mt_start for r in results])}",
@@ -246,10 +246,10 @@ def run_live(a) -> None:
                 "lag": None if e.english else e.lag,
             }, ensure_ascii=False) + "\n")
     if spoken := [e for e in events if not e.english]:
-        lags = [e.lag for e in spoken]
+        lags = [lag for e in spoken for lag in e.lags]
         summary = "\n".join([
-            f"segments      {len(spoken)} interpreted, {len(events) - len(spoken)} English",
-            f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (source segment end → playback start)",
+            f"segments      {len(spoken)} spoken ({len(lags)} pieces), {len(events) - len(spoken)} English",
+            f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (each piece's end → playback start)",
             f"translate     mean {statistics.mean(e.mt_end - e.mt_start for e in spoken) * 1000:.0f} ms  (wall, interleaved with listening)",
             f"catching up   {sum(e.brief for e in spoken)} brief, {sum(e.pace > 1 for e in spoken)} faster",
         ])

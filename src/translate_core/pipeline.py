@@ -17,7 +17,7 @@ import numpy as np
 from .asr import ParakeetASR
 from .audio import SAMPLE_RATE, resample
 from .segmenter import Segmenter, SegmenterConfig
-from .translate import LLMTranslator
+from .translate import LLMTranslator, echoes
 from .tts import PiperTTS
 from .types import Result, Segment, Timing
 from .vad import SileroVAD
@@ -107,34 +107,58 @@ def interpret(
     segments: list[tuple[Segment, float]], translator: LLMTranslator, tts: PiperTTS,
     backlog: Backlog | None = Backlog(),
     english: Callable[[str], bool] | None = None,
+    merge: bool = True,
     on_result: Callable[[Result], None] = lambda r: None,
 ) -> tuple[list[Result], list[np.ndarray]]:
     """Translate and voice each segment, placing it on the playback clock.
 
     With `english`, pieces it says are already English are not spoken, only
-    remembered as context; they still appear in the results, marked.
+    remembered as context; they still appear in the results, marked. With
+    `merge`, pieces already waiting when the translator frees up go out as one.
     """
     results, clips = [], []
     mt_free = tts_free = play_free = 0.0
-    for s, asr_ms in segments:
-        t = Timing(asr_ms=asr_ms)
 
-        t.mt_start = max(s.decided_at, mt_free)
-        if english:
-            t0 = perf_counter()
-            if english(s.text):
-                translator.remember(s.text)
-                t.mt_end = mt_free = t.mt_start + (perf_counter() - t0)
-                result = Result(s, "", 0.0, t, english=True)
-                results.append(result)
-                clips.append(np.zeros(0, np.float32))
-                on_result(result)
-                continue
-            t.mt_start += perf_counter() - t0
+    def quiet(s: Segment, t: Timing, text: str = "") -> None:
+        results.append(Result(s, text, 0.0, t, english=True))
+        clips.append(np.zeros(0, np.float32))
+        on_result(results[-1])
+
+    i = 0
+    while i < len(segments):
+        start = max(segments[i][0].decided_at, mt_free)
+        group = [segments[i]]
+        i += 1
+        while merge and i < len(segments) and segments[i][0].decided_at <= start:
+            group.append(segments[i])
+            i += 1
+
+        foreign: list[Segment] = []
+        for s, asr_ms in group:
+            if english:
+                t0 = perf_counter()
+                is_english = english(s.text)
+                spent = perf_counter() - t0
+                if is_english:
+                    translator.remember(s.text)
+                    quiet(s, Timing(asr_ms=asr_ms, mt_start=start, mt_end=start + spent))
+                start += spent
+                if is_english:
+                    continue
+            foreign.append(s)
+        mt_free = start
+        if not foreign:
+            continue
+
+        s = combine(foreign)
+        t = Timing(asr_ms=group[-1][1], mt_start=start)
         brief = bool(backlog) and backlog.brief(play_free - t.mt_start)
         t0 = perf_counter()
         text = translator.translate(s.text, brief=brief)
         t.mt_end = mt_free = t.mt_start + (perf_counter() - t0)
+        if english and echoes(s.text, text):
+            quiet(s, t, text)
+            continue
 
         pace = backlog.pace(play_free - t.mt_end) if backlog else 1.0
         t0 = perf_counter()
@@ -151,6 +175,20 @@ def interpret(
         clips.append(speech)
         on_result(result)
     return results, clips
+
+
+def combine(segments: list[Segment]) -> Segment:
+    """Several waiting pieces as one, timed from the first word to the last.
+
+    Each piece's end is kept, so lag can be counted for every one of them:
+    the earlier ones waited longer.
+    """
+    if len(segments) == 1:
+        return segments[0]
+    last = segments[-1]
+    return Segment(segments[0].index, [w for s in segments for w in s.words],
+                   "+".join(dict.fromkeys(s.reason for s in segments)), last.decided_at,
+                   parts=[s.end for s in segments])
 
 
 def render(source: np.ndarray, placed: list[tuple[float, np.ndarray]], sr: int) -> np.ndarray:

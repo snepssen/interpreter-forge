@@ -1,4 +1,6 @@
+import re
 from collections.abc import Generator
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from mlx_lm import load, stream_generate
@@ -90,6 +92,17 @@ def _piece(text: str, brief: bool = False) -> str:
     if brief:
         return f"The listener is falling behind. Translate as briefly as possible, keeping only the essential meaning: {text}"
     return f"Translate: {text}"
+
+
+def echoes(source: str, translation: str) -> bool:
+    """The "translation" is mostly the source again: English the ASR garbled
+    too badly for the English check to pass, which the model then repeats.
+
+    Over a 70-minute conversation 40 of 101 interpreted pieces were this, and
+    no real translation scored above 0.6.
+    """
+    words = lambda t: re.sub(r"[^\w\s]", "", t.lower()).split()  # noqa: E731
+    return SequenceMatcher(None, words(source), words(translation)).ratio() >= 0.6
 
 
 def shared_prefix(a: list[int], b: list[int]) -> int:
