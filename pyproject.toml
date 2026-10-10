@@ -1,0 +1,29 @@
+[project]
+name = "translate-core"
+version = "0.1.0"
+description = "Live speech interpretation into English, locally: Parakeet ASR, a small LLM, Piper voices."
+readme = "README.md"
+authors = [
+    { name = "snepssen", email = "snepssen@proton.me" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mlx-lm>=0.32.0",
+    "numpy>=2.5.3",
+    "onnxruntime>=1.31.0",
+    "parakeet-mlx>=0.5.3",
+    "piper-tts>=1.8.0",
+    "soundfile>=0.14.0",
+]
+
+[project.scripts]
+translate-core = "translate_core.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.10.5,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
