@@ -36,6 +36,7 @@ def main() -> None:
         s.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
         s.add_argument("--no-judge", action="store_true", help="segment on acoustics and punctuation alone")
         s.add_argument("--no-catch-up", action="store_true", help="never condense or speed up when behind")
+        s.add_argument("--speak-english", action="store_true", help="also voice speech that is already English")
         d = SegmenterConfig()
         s.add_argument("--hop", type=float, default=d.hop)
         s.add_argument("--long-pause", type=float, default=d.long_pause)
@@ -53,7 +54,7 @@ def load_models(a, need_translator: bool = True):
     import numpy as np
 
     from .asr import ParakeetASR
-    from .judge import CompletenessJudge
+    from .judge import CompletenessJudge, EnglishCheck
     from .translate import LLMTranslator
     from .tts import PiperTTS
 
@@ -61,7 +62,7 @@ def load_models(a, need_translator: bool = True):
     asr = ParakeetASR(a.asr)
     asr.transcribe(np.zeros(audio.SAMPLE_RATE, np.float32))  # first call compiles kernels
 
-    translator = judge = tts = None
+    translator = judge = english = tts = None
     if need_translator or not a.no_judge:
         info(f"loading {a.mt}")
         translator = LLMTranslator(a.mt)
@@ -71,9 +72,12 @@ def load_models(a, need_translator: bool = True):
         judge = CompletenessJudge(translator.model, translator.tokenizer)
         judge("Hallo")  # fills the cache with its instructions
     if need_translator:
+        if not a.speak_english:
+            english = EnglishCheck(translator.model, translator.tokenizer)
+            english("Hello")  # fills the cache with its instructions
         tts = PiperTTS(a.voice)
         tts.speak("Ready.")
-    return asr, translator, judge, tts
+    return asr, translator, judge, english, tts
 
 
 def backlog(a):
@@ -100,7 +104,7 @@ def run_file(a) -> None:
     from .pipeline import interpret, render, segment
     from .vad import SileroVAD
 
-    asr, translator, judge, tts = load_models(a, need_translator=not a.segment_only)
+    asr, translator, judge, english, tts = load_models(a, need_translator=not a.segment_only)
     table = []
     for path in a.inputs:
         out = (a.out / path.stem if len(a.inputs) > 1 else a.out) if a.out else Path("runs") / path.stem
@@ -114,7 +118,7 @@ def run_file(a) -> None:
 
         info("interpreting")
         translator.reset()
-        results, clips = interpret(segments, translator, tts, backlog(a), on_result=show_result)
+        results, clips = interpret(segments, translator, tts, backlog(a), english, on_result=show_result)
 
         placed = [(r.timing.play_start, clip) for r, clip in zip(results, clips)]
         audio.write(out / "listen.wav", render(source, placed, tts.sample_rate), tts.sample_rate)
@@ -125,13 +129,13 @@ def run_file(a) -> None:
         (out / "summary.txt").write_text(summary + "\n")
         print("\n" + summary + "\n")
         info(f"wrote {out}/listen.wav (L: speaker, R: interpreter), trace.jsonl, summary.txt")
-        if results:
-            lags = [r.lag for r in results]
-            table.append((path.name, seconds, len(results), statistics.median(lags), max(lags)))
+        if spoken := [r for r in results if not r.english]:
+            lags = [r.lag for r in spoken]
+            table.append((path.name, seconds, len(spoken), statistics.median(lags), max(lags)))
 
     if len(table) > 1:
         width = max(len(row[0]) for row in table)
-        print(f"{'':{width}}  length  pieces  median lag  max lag")
+        print(f"{'':{width}}  length  spoken  median lag  max lag")
         for name, seconds, n, median, worst in table:
             print(f"{name:{width}}  {seconds:5.1f}s  {n:6d}  {median:9.1f}s  {worst:6.1f}s")
 
@@ -143,6 +147,9 @@ def show_segment(s: Segment, asr_ms: float) -> None:
 
 def show_result(r: Result) -> None:
     t = r.timing
+    if r.english:
+        print(f"  #{r.segment.index:<3} English, kept as context", flush=True)
+        return
     print(f"  #{r.segment.index:<3} mt {(t.mt_end - t.mt_start) * 1000:5.0f}ms  "
           f"tts {(t.tts_end - t.tts_start) * 1000:4.0f}ms  "
           f"plays {t.play_start:6.2f}s  lag {r.lag:4.1f}s{catch_up(r.brief, r.pace)}  → {r.translation}",
@@ -154,15 +161,18 @@ def trace(r: Result) -> dict:
     return {
         "index": s.index, "reason": s.reason, "start": s.start, "end": s.end,
         "decided_at": s.decided_at, "source": s.text, "translation": r.translation,
-        "audio_seconds": r.audio_seconds, "lag": r.lag, "brief": r.brief, "pace": r.pace,
+        "english": r.english, "audio_seconds": r.audio_seconds,
+        "lag": None if r.english else r.lag, "brief": r.brief, "pace": r.pace,
         **asdict(r.timing),
         "words": [asdict(w) for w in s.words],
     }
 
 
 def summarise(results: list[Result], duration: float) -> str:
+    english = sum(r.english for r in results)
+    results = [r for r in results if not r.english]
     if not results:
-        return "no segments"
+        return f"nothing to interpret ({english} English pieces)"
     lags = [r.lag for r in results]
     waits = [r.segment.decided_at - r.segment.end for r in results]
     queued = [r.timing.play_start - r.timing.tts_end for r in results]
@@ -170,7 +180,7 @@ def summarise(results: list[Result], duration: float) -> str:
     reasons = {k: sum(r.segment.reason == k for r in results)
                for k in ("sentence", "judged", "pause", "clause", "force", "flush")}
     return "\n".join([
-        f"segments      {len(results)}  ({', '.join(f'{k} {v}' for k, v in reasons.items() if v)})",
+        f"segments      {len(results)} interpreted  ({', '.join(f'{k} {v}' for k, v in reasons.items() if v)}), {english} English",
         f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (source segment end → playback start)",
         f"commit wait   median {statistics.median(waits):.1f} s  (segment end → decision)",
         f"asr pass      mean {statistics.mean(r.timing.asr_ms for r in results):.0f} ms",
@@ -192,7 +202,7 @@ def run_live(a) -> None:
 
     name = f"live-{a.input.stem}" if a.input else time.strftime("live-%Y%m%d-%H%M%S")
     out = a.out or Path("runs") / name
-    asr, translator, judge, tts = load_models(a)
+    asr, translator, judge, english, tts = load_models(a)
 
     heard: list[np.ndarray] = []
     if a.input:
@@ -207,10 +217,13 @@ def run_live(a) -> None:
         print(f"[{s.start:6.2f}–{s.end:6.2f}] {s.reason:<8} │ {s.text}", flush=True)
 
     def show_event(e: Event) -> None:
+        if e.english:
+            print(f"  #{e.segment.index:<3} English, kept as context", flush=True)
+            return
         print(f"  #{e.segment.index:<3} mt {(e.mt_end - e.mt_start) * 1000:5.0f}ms  plays {e.play_start:6.2f}s  "
               f"lag {e.lag:4.1f}s{catch_up(e.brief, e.pace)}  → {e.translation}", flush=True)
 
-    interpreter = LiveInterpreter(asr, translator, tts, judge, a.config, backlog(a),
+    interpreter = LiveInterpreter(asr, translator, tts, judge, english, a.config, backlog(a),
                                   on_segment=show_live_segment, on_event=show_event)
     stop = threading.Event()
     info("listening; Ctrl-C to stop" if not a.input else f"playing {a.input.name} in real time")
@@ -225,18 +238,20 @@ def run_live(a) -> None:
     with open(out / "trace.jsonl", "w") as fh:
         for e in events:
             fh.write(json.dumps({
-                "index": e.segment.index, "reason": e.segment.reason, "start": e.segment.start,
+                "index": e.segment.index, "reason": e.segment.reason, "english": e.english,
+                "start": e.segment.start,
                 "end": e.segment.end, "source": e.segment.text, "translation": e.translation,
                 "brief": e.brief, "pace": e.pace, "mt_start": e.mt_start, "mt_end": e.mt_end,
-                "play_start": e.play_start, "play_seconds": e.play_seconds, "lag": e.lag,
+                "play_start": e.play_start, "play_seconds": e.play_seconds,
+                "lag": None if e.english else e.lag,
             }, ensure_ascii=False) + "\n")
-    if events:
-        lags = [e.lag for e in events]
+    if spoken := [e for e in events if not e.english]:
+        lags = [e.lag for e in spoken]
         summary = "\n".join([
-            f"segments      {len(events)}",
+            f"segments      {len(spoken)} interpreted, {len(events) - len(spoken)} English",
             f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (source segment end → playback start)",
-            f"translate     mean {statistics.mean(e.mt_end - e.mt_start for e in events) * 1000:.0f} ms  (wall, interleaved with listening)",
-            f"catching up   {sum(e.brief for e in events)} brief, {sum(e.pace > 1 for e in events)} faster",
+            f"translate     mean {statistics.mean(e.mt_end - e.mt_start for e in spoken) * 1000:.0f} ms  (wall, interleaved with listening)",
+            f"catching up   {sum(e.brief for e in spoken)} brief, {sum(e.pace > 1 for e in spoken)} faster",
         ])
         (out / "summary.txt").write_text(summary + "\n")
         print("\n" + summary)

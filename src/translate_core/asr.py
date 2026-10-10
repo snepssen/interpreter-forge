@@ -7,10 +7,16 @@ from parakeet_mlx.audio import get_logmel
 from .types import Word
 
 DEFAULT_MODEL = "mlx-community/parakeet-tdt-0.6b-v3"
+CACHE_LIMIT = 1 << 30  # bytes MLX may keep for reuse
+
 
 
 class ParakeetASR:
     def __init__(self, model_id: str = DEFAULT_MODEL):
+        # Every window is a different length, so every pass allocates fresh
+        # buffers, and MLX keeps them all for reuse unless told otherwise: 9 GB
+        # after 90 s of conversation, and a 16 GB machine deep in swap.
+        mx.set_cache_limit(CACHE_LIMIT)
         self.model = from_pretrained(_local(model_id))
         self.sample_rate = self.model.preprocessor_config.sample_rate
 

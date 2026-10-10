@@ -52,13 +52,15 @@ def segment(
             vad_pos += frame
         if vad.last_speech <= seg.mark:
             continue  # nothing said since the last commit
+        if now < asr_free:
+            continue  # still busy with the last pass; live, this hop never happens
 
         start = seg.window_start()
         t0 = perf_counter()
         words = seg.new_words(asr.transcribe(audio[int(start * sr):end], start))
         took = perf_counter() - t0
         asr_ms = took * 1000
-        asr_free = max(now, asr_free) + took  # a pass can't start before the last one ends
+        asr_free = now + took
 
         silence = vad.silence(now)
         judging = 0.0
@@ -104,15 +106,31 @@ class Backlog:
 def interpret(
     segments: list[tuple[Segment, float]], translator: LLMTranslator, tts: PiperTTS,
     backlog: Backlog | None = Backlog(),
+    english: Callable[[str], bool] | None = None,
     on_result: Callable[[Result], None] = lambda r: None,
 ) -> tuple[list[Result], list[np.ndarray]]:
-    """Translate and voice each segment, placing it on the playback clock."""
+    """Translate and voice each segment, placing it on the playback clock.
+
+    With `english`, pieces it says are already English are not spoken, only
+    remembered as context; they still appear in the results, marked.
+    """
     results, clips = [], []
     mt_free = tts_free = play_free = 0.0
     for s, asr_ms in segments:
         t = Timing(asr_ms=asr_ms)
 
         t.mt_start = max(s.decided_at, mt_free)
+        if english:
+            t0 = perf_counter()
+            if english(s.text):
+                translator.remember(s.text)
+                t.mt_end = mt_free = t.mt_start + (perf_counter() - t0)
+                result = Result(s, "", 0.0, t, english=True)
+                results.append(result)
+                clips.append(np.zeros(0, np.float32))
+                on_result(result)
+                continue
+            t.mt_start += perf_counter() - t0
         brief = bool(backlog) and backlog.brief(play_free - t.mt_start)
         t0 = perf_counter()
         text = translator.translate(s.text, brief=brief)
@@ -128,7 +146,7 @@ def interpret(
         t.play_start = max(t.tts_end, play_free)
         t.play_end = play_free = t.play_start + seconds
 
-        result = Result(s, text, seconds, t, brief, pace)
+        result = Result(s, text, seconds, t, brief=brief, pace=pace)
         results.append(result)
         clips.append(speech)
         on_result(result)

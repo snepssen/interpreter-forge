@@ -78,6 +78,10 @@ class LLMTranslator:
         self.history.append((text, out))
         return out
 
+    def remember(self, text: str) -> None:
+        """Keep a piece that needed no translation as context for the ones that do."""
+        self.history.append((text, text))
+
     def reset(self) -> None:
         self.history.clear()
 

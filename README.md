@@ -105,6 +105,17 @@ interpreter's speech from 19.1 s down to 16.1 s against 15.5 s of source, and th
 worst lag from 14.9 s to 12.4 s; what remains is the 11 s before the first piece
 could be cut at all. `--no-catch-up` turns it off.
 
+## English is left alone
+
+You understand English, and in a conversation the English side is usually you
+or someone talking to you. So before translating, the model is asked one more
+yes/no question, *is this already English?*, in the same single pass as the
+judge. Two or more letters English doesn't use (ą, ł, ż, ő, ű...) answer it
+without asking. English pieces aren't spoken; they're kept as conversation
+context, so replies to them translate better. 17 of 18 right on real and
+held-out phrases; the miss was English heard as foreign, which only costs a
+needless repeat. `--speak-english` voices everything.
+
 ## Clock times
 
 A 4B model reads European clock times the English way: "halb elf" came out as

@@ -153,6 +153,7 @@ class Event:
 
     segment: Segment
     translation: str = ""
+    english: bool = False  # already English: kept as context, not spoken
     brief: bool = False
     pace: float = 1.0
     mt_start: float = 0.0
@@ -174,10 +175,12 @@ class _Job:
 class LiveInterpreter:
     def __init__(self, asr: ParakeetASR, translator: LLMTranslator, tts: PiperTTS,
                  judge: Callable[[str], bool] | None = None,
+                 english: Callable[[str], bool] | None = None,
                  config: SegmenterConfig | None = None, backlog: Backlog | None = Backlog(),
                  on_segment: Callable[[Segment], None] = lambda s: None,
                  on_event: Callable[[Event], None] = lambda e: None):
         self.asr, self.translator, self.tts, self.judge = asr, translator, tts, judge
+        self.english = english
         self.config = config or SegmenterConfig()
         self.backlog = backlog
         self.on_segment, self.on_event = on_segment, on_event
@@ -251,6 +254,12 @@ class LiveInterpreter:
                 if job is None and waiting:
                     event = waiting.pop(0)
                     event.mt_start = clock()
+                    if self.english and self.english(event.segment.text):
+                        self.translator.remember(event.segment.text)
+                        event.english, event.mt_end = True, clock()
+                        self.events.append(event)
+                        self.on_event(event)
+                        continue
                     event.brief = bool(self.backlog) and self.backlog.brief(player.backlog())
                     job = _Job(event, self.translator.steps(event.segment.text, event.brief))
                 if job is not None:
