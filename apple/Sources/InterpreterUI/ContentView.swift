@@ -95,7 +95,9 @@ public struct ContentView: View {
                 Button("Try again") { Task { await session.prepare() } }
             case .ready:
                 Text("Press Live and put your headphones in.").font(.title3)
-                Text("Speech in \(Languages.list(session.languages.filter { $0 != "en" })) is interpreted into English as it comes; English is left alone.")
+                Text(session.anyLanguage
+                     ? "Speech in any language is interpreted into English as it comes; English is left alone."
+                     : "Speech in \(Languages.list(session.languages.filter { $0 != "en" })) is interpreted into English as it comes; English is left alone, anything else is taken as misheard.")
                     .foregroundStyle(.secondary)
             default:
                 Text("Listening…").foregroundStyle(.secondary)
@@ -195,6 +197,8 @@ struct LanguageMenu: View {
     static let all: [(code: String, name: String)] =
         Languages.names.map { (code: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
 
+    private var any: Bool { !languages.contains { $0 != "en" } }
+
     private func binding(_ code: String) -> Binding<Bool> {
         Binding(get: { languages.contains(code) },
                 set: { on in
@@ -208,8 +212,15 @@ struct LanguageMenu: View {
 
     var body: some View {
         Menu {
-            ForEach(Self.all, id: \.code) { language in
-                Toggle(language.name, isOn: binding(language.code)).disabled(language.code == "en")
+            Button {
+                languages = ["en"]
+            } label: {
+                if any { Label("Any language", systemImage: "checkmark") } else { Text("Any language") }
+            }
+            Section("Only these") {
+                ForEach(Self.all.filter { $0.code != "en" }, id: \.code) { language in
+                    Toggle(language.name, isOn: binding(language.code))
+                }
             }
         } label: {
             Text(Languages.list(languages.filter { $0 != "en" }).ifEmpty("Any language") + " → English")
@@ -219,7 +230,7 @@ struct LanguageMenu: View {
         #endif
         .fixedSize()
         .disabled(disabled)
-        .help("The languages spoken here. Anything else is taken as misheard.")
+        .help("Any language by default. Name the languages spoken here to treat anything else as misheard.")
     }
 }
 

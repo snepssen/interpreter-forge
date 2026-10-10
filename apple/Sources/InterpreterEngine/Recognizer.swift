@@ -10,7 +10,7 @@ public actor Recognizer {
     /// Parakeet picks the language itself, and on short or noisy Polish it can
     /// write Russian. A hint in the expected languages' script keeps it out of
     /// the wrong alphabet at the source (FluidAudio's script-aware filtering).
-    private let hint: Language?
+    private var hint: Language?
 
     public static func load(languages: [String], progress: (@Sendable (Double) -> Void)? = nil) async throws -> Recognizer {
         var handler: ProgressHandler?
@@ -23,9 +23,17 @@ public actor Recognizer {
 
     private init(manager: AsrManager, languages: [String]) {
         self.manager = manager
-        // Only a script hint helps, so any expected language of the one script will do.
+        hint = Self.hint(for: languages)
+    }
+
+    /// Only when the languages are restricted: with any language allowed,
+    /// Russian is as welcome as Polish and no alphabet can be ruled out.
+    public func setLanguages(_ languages: [String]) { hint = Self.hint(for: languages) }
+
+    /// Only a script hint helps, so any expected language of the one script will do.
+    static func hint(for languages: [String]) -> Language? {
         let hints = languages.filter { $0 != "en" }.compactMap(Language.init(rawValue:))
-        hint = Set(hints.map(\.script)).count == 1 ? hints.first : nil
+        return Set(hints.map(\.script)).count == 1 ? hints.first : nil
     }
 
     /// Words in `samples` (16 kHz mono), timed in stream seconds from `offset`.

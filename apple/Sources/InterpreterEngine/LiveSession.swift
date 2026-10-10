@@ -34,9 +34,23 @@ public final class LiveSession {
     public private(set) var level: Float = 0
     public private(set) var notice: String?
 
-    /// Spoken here; anything else is taken as misheard. English is understood
-    /// by the listener and kept as context, not spoken.
-    public var languages = ["en", "pl", "hu", "nl"]
+    /// English alone means any language: everything that isn't English is
+    /// translated. Naming languages restricts to them, and anything else is
+    /// taken as misheard, which helps where Polish keeps coming out as Russian
+    /// but would silence a Romanian guest. English is understood by the
+    /// listener and kept as context, not spoken. Remembered between launches.
+    public var languages: [String] = UserDefaults.standard.stringArray(forKey: "languages") ?? ["en"] {
+        didSet {
+            UserDefaults.standard.set(languages, forKey: "languages")
+            let languages = languages
+            Task { [recognizer, linguist] in
+                await recognizer?.setLanguages(languages)
+                await linguist?.setLanguages(languages)
+            }
+        }
+    }
+
+    public var anyLanguage: Bool { !languages.contains { $0 != "en" } }
     /// Device names (or part of them); nil for the system's.
     public var microphone: String?
     public var speaker: String?
@@ -46,7 +60,6 @@ public final class LiveSession {
     private var voice: Voice?
     private var pipeline: Pipeline?
     private var meter: Task<Void, Never>?
-    private var loadedLanguages: [String] = []
 
     public init() {}
 
@@ -54,7 +67,7 @@ public final class LiveSession {
 
     /// Load the three models; the first run downloads Parakeet (a few hundred MB).
     public func prepare() async {
-        guard phase == .idle || phase.isFailure || loadedLanguages != languages else { return }
+        guard phase == .idle || phase.isFailure else { return }
         do {
             if Resources.translationModel == nil { phase = .loading("Downloading the translation model…") }
             let model = try await ModelStore.translationModel { fraction in
@@ -79,7 +92,6 @@ public final class LiveSession {
             voice = try Voice(model: voiceURL, espeakData: espeak)
             phase = .loading("Warming up…")
             try await linguist?.warmUp()
-            loadedLanguages = languages
             phase = .ready
         } catch {
             phase = .failed(error.localizedDescription)

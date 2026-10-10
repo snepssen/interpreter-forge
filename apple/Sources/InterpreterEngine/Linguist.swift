@@ -22,8 +22,9 @@ public enum Silence: String, Sendable {
 /// writing the answer (`translate.py`, `judge.py`).
 public actor Linguist {
     private let context: ModelContext
-    private let languages: [String]
-    private let system: String
+    /// The languages spoken here, if restricted; empty (or English alone) for any.
+    private var languages: [String]
+    private var system: String
     private var history: [(source: String, target: String)] = []
     private let contextPieces = 3
     private var translator: PromptCache
@@ -44,8 +45,17 @@ public actor Linguist {
         translator = try PromptCache(context.model)
         self.context = context
         self.languages = languages
+        system = Self.system(for: languages)
+    }
+
+    public func setLanguages(_ languages: [String]) {
+        self.languages = languages
+        system = Self.system(for: languages)
+    }
+
+    private static func system(for languages: [String]) -> String {
         let spoken = languages.filter { $0 != "en" }
-        system = Prompts.translate + (spoken.isEmpty ? "" : Prompts.speakers(Languages.list(spoken)))
+        return Prompts.translate + (spoken.isEmpty ? "" : Prompts.speakers(Languages.list(spoken)))
     }
 
     /// The first token of each spelling; the model's answer starts with one of them.
@@ -116,7 +126,7 @@ public actor Linguist {
         // Two or more letters English doesn't use settle it without asking.
         let foreign = text.filter { $0.isLetter && !$0.isASCII }.count
         if foreign < 2, try ask(Prompts.english, text) >= 0.5 { return .english }
-        guard !languages.isEmpty else { return nil }
+        guard languages.contains(where: { $0 != "en" }) else { return nil }  // any language: translate it
         let verdict = try Languages.evidence(text, languages)
             ?? (ask(Prompts.expected(Languages.list(languages)), text) >= 0.5)
         return verdict ? nil : .language

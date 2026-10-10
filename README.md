@@ -27,10 +27,20 @@ with the same core shared by the iPhone app to come.
     apple/build.sh                 # checks, then apple/Interpreter.app
 
 Press **Live** (or Space) and the feed fills with what is said around you,
-translated, with each line's lag; English is shown dimmed and kept quiet. Pick
-the languages spoken here, the mic (an iPhone on the table through Continuity
-hears the room better than AirPods) and the output from the top bar. The
-first launch downloads Parakeet (a few hundred MB).
+translated, with each line's lag; English is shown dimmed and kept quiet. Any
+language is translated by default; naming the languages spoken here makes
+anything else count as misheard (useful where Polish keeps coming out as
+Russian, but it silences a Romanian guest, so it is opt-in). Pick the mic (an
+iPhone on the table through Continuity hears the room better than AirPods)
+and the output from the top bar. The first launch downloads Parakeet (a few
+hundred MB).
+
+The iPhone app (`apple/iOS/build-ios.sh`, iOS 17+) is the same engine and
+views. On an iPhone 17 (8 GB) the 4B translation model fits with the
+increased-memory entitlement, at 3.4–4.0 s lag in a first real test. The
+phone's own mic listens, AirPods play the English in full quality, and it
+keeps going with the screen locked. The first launch downloads the
+translation model (2.3 GB).
 
 | | Python (MLX) | Swift app |
 |---|---|---|
@@ -222,7 +232,4 @@ vor`, `kwart voor`). Held-out times in seven languages: 14 of 14.
 
 ## Not yet
 
-- The iPhone app: the engine targets iOS 17, but espeak-ng is vendored as a
-  macOS library and needs an iOS build, and a 4B model needs a higher-memory
-  iPhone.
 - Any → any.

@@ -2,7 +2,7 @@
 // measuring what the app does without a microphone: the same loop, the same
 // models, the same contention. The Python rig's `live --from`, in Swift.
 //
-//   tcrun <audio> [--languages en,pl,hu,nl] [--out runs/swift-<name>]
+//   tcrun <audio> [--languages en,pl,hu,nl]   (default: any language) [--out runs/swift-<name>]
 import AVFoundation
 import FluidAudio
 import Foundation
@@ -15,7 +15,7 @@ var args = Array(CommandLine.arguments.dropFirst())
     defer { args.removeSubrange(i...(i + 1)) }
     return args[i + 1]
 }
-let languages = (option("--languages") ?? "en,pl,hu,nl").split(separator: ",").map(String.init)
+let languages = (option("--languages") ?? "en").split(separator: ",").map(String.init)
 let outOption = option("--out")
 guard let input = args.first else {
     print("usage: tcrun <audio> [--languages en,pl,hu,nl] [--out dir]")
