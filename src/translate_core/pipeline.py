@@ -9,6 +9,7 @@ model that, so treat its latencies as a lower bound.
 """
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from time import perf_counter
 
 import numpy as np
@@ -77,8 +78,32 @@ def segment(
     return out
 
 
+@dataclass
+class Backlog:
+    """What a human interpreter does when falling behind: say less, say it faster.
+
+    The backlog is how long a piece would wait behind English still to be
+    spoken. Both measures are decided before the stage runs, from the backlog
+    as it stands then.
+    """
+
+    brief_after: float = 1.5  # seconds of backlog before translating for the gist
+    faster_after: float = 1.0  # seconds of backlog before speeding up
+    pace_per_second: float = 0.1  # extra pace per second of backlog beyond that
+    max_pace: float = 1.3
+
+    def brief(self, backlog: float) -> bool:
+        return backlog >= self.brief_after
+
+    def pace(self, backlog: float) -> float:
+        if backlog <= self.faster_after:
+            return 1.0
+        return min(self.max_pace, 1.0 + self.pace_per_second * (backlog - self.faster_after))
+
+
 def interpret(
     segments: list[tuple[Segment, float]], translator: LLMTranslator, tts: PiperTTS,
+    backlog: Backlog | None = Backlog(),
     on_result: Callable[[Result], None] = lambda r: None,
 ) -> tuple[list[Result], list[np.ndarray]]:
     """Translate and voice each segment, placing it on the playback clock."""
@@ -87,13 +112,15 @@ def interpret(
     for s, asr_ms in segments:
         t = Timing(asr_ms=asr_ms)
 
-        t0 = perf_counter()
-        text = translator.translate(s.text)
         t.mt_start = max(s.decided_at, mt_free)
+        brief = bool(backlog) and backlog.brief(play_free - t.mt_start)
+        t0 = perf_counter()
+        text = translator.translate(s.text, brief=brief)
         t.mt_end = mt_free = t.mt_start + (perf_counter() - t0)
 
+        pace = backlog.pace(play_free - t.mt_end) if backlog else 1.0
         t0 = perf_counter()
-        speech = tts.speak(text)
+        speech = tts.speak(text, pace=pace)
         t.tts_start = max(t.mt_end, tts_free)
         t.tts_end = tts_free = t.tts_start + (perf_counter() - t0)
 
@@ -101,7 +128,7 @@ def interpret(
         t.play_start = max(t.tts_end, play_free)
         t.play_end = play_free = t.play_start + seconds
 
-        result = Result(s, text, seconds, t)
+        result = Result(s, text, seconds, t, brief, pace)
         results.append(result)
         clips.append(speech)
         on_result(result)

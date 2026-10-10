@@ -33,13 +33,14 @@ class LLMTranslator:
         self._cache = make_prompt_cache(self.model)
         self._cached: list[int] = []  # the tokens the cache currently holds
 
-    def translate(self, text: str) -> str:
+    def translate(self, text: str, brief: bool = False) -> str:
+        """English for `text`; `brief` asks for the gist only, to catch up a backlog."""
         if len(self.history) >= 2 * self.context:
             del self.history[: len(self.history) - self.context]
         messages = [{"role": "system", "content": SYSTEM}]
         for source, target in self.history:
             messages += [{"role": "user", "content": _piece(source)}, {"role": "assistant", "content": target}]
-        messages.append({"role": "user", "content": _piece(text)})
+        messages.append({"role": "user", "content": _piece(text, brief)})
         prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True)
 
         keep = min(shared_prefix(self._cached, prompt), len(prompt) - 1)
@@ -62,7 +63,9 @@ class LLMTranslator:
         self.history.clear()
 
 
-def _piece(text: str) -> str:
+def _piece(text: str, brief: bool = False) -> str:
+    if brief:
+        return f"The listener is falling behind. Translate as briefly as possible, keeping only the essential meaning: {text}"
     return f"Translate: {text}"
 
 

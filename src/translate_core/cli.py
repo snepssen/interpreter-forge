@@ -22,6 +22,7 @@ def main() -> None:
     p.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
     p.add_argument("--segment-only", action="store_true", help="stop after segmentation")
     p.add_argument("--no-judge", action="store_true", help="segment on acoustics and punctuation alone")
+    p.add_argument("--no-catch-up", action="store_true", help="never condense or speed up when behind")
     d = SegmenterConfig()
     p.add_argument("--hop", type=float, default=d.hop)
     p.add_argument("--long-pause", type=float, default=d.long_pause)
@@ -38,7 +39,7 @@ def main() -> None:
     import numpy as np
 
     from .asr import ParakeetASR
-    from .pipeline import interpret, render, segment
+    from .pipeline import Backlog, interpret, render, segment
     from .vad import SileroVAD
 
     source = audio.load(a.input)
@@ -71,7 +72,8 @@ def main() -> None:
     tts.speak("Ready.")
 
     info("interpreting")
-    results, clips = interpret(segments, translator, tts, on_result=show_result)
+    results, clips = interpret(segments, translator, tts, None if a.no_catch_up else Backlog(),
+                               on_result=show_result)
 
     audio.write(out / "listen.wav", render(source, results, clips, tts.sample_rate), tts.sample_rate)
     with open(out / "trace.jsonl", "w") as f:
@@ -96,7 +98,12 @@ def show_result(r: Result) -> None:
     t = r.timing
     print(f"  #{r.segment.index:<3} mt {(t.mt_end - t.mt_start) * 1000:5.0f}ms  "
           f"tts {(t.tts_end - t.tts_start) * 1000:4.0f}ms  "
-          f"plays {t.play_start:6.2f}s  lag {r.lag:4.1f}s  → {r.translation}", flush=True)
+          f"plays {t.play_start:6.2f}s  lag {r.lag:4.1f}s{catch_up(r)}  → {r.translation}", flush=True)
+
+
+def catch_up(r: Result) -> str:
+    marks = (["brief"] if r.brief else []) + ([f"x{r.pace:.2f}"] if r.pace > 1 else [])
+    return f"  [{' '.join(marks)}]" if marks else ""
 
 
 def trace(r: Result) -> dict:
@@ -104,7 +111,8 @@ def trace(r: Result) -> dict:
     return {
         "index": s.index, "reason": s.reason, "start": s.start, "end": s.end,
         "decided_at": s.decided_at, "source": s.text, "translation": r.translation,
-        "audio_seconds": r.audio_seconds, "lag": r.lag, **asdict(r.timing),
+        "audio_seconds": r.audio_seconds, "lag": r.lag, "brief": r.brief, "pace": r.pace,
+        **asdict(r.timing),
         "words": [asdict(w) for w in s.words],
     }
 
@@ -125,5 +133,6 @@ def summarise(results: list[Result], duration: float) -> str:
         f"translate     mean {ms([r.timing.mt_end - r.timing.mt_start for r in results])}",
         f"speak         mean {ms([r.timing.tts_end - r.timing.tts_start for r in results])}",
         f"queued        max {max(queued):.1f} s  (ready → playing, i.e. backlog)",
+        f"catching up   {sum(r.brief for r in results)} brief, {sum(r.pace > 1 for r in results)} faster",
         f"speech        source {duration:.1f} s, interpreter {sum(r.audio_seconds for r in results):.1f} s",
     ])

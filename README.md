@@ -68,9 +68,19 @@ audio up to *now*), measures each stage's compute for real, and lays it onto a
 clock where each stage is one worker, so queueing shows up as lag. Live, ASR
 and translation share the GPU, so treat these latencies as a lower bound.
 
+## Falling behind
+
+The English can take longer to say than the original, and a speaker who never
+stops gives no room to catch up. So, like a human interpreter, it says less and
+says it faster once English is queueing: past 1.5 s of backlog the next piece is
+translated for the gist, and past 1 s the voice speeds up, to at most 1.3x.
+The voice graph rounds each phoneme up to a whole frame, so a request for 1.1x
+delivers about 1.05x and 1.4x about 1.35x. On the French run-on this brings the
+interpreter's speech from 19.1 s down to 16.1 s against 15.5 s of source, and the
+worst lag from 14.9 s to 12.4 s; what remains is the 11 s before the first piece
+could be cut at all. `--no-catch-up` turns it off.
+
 ## Not yet
 
 - Live microphone → headphones.
-- Backlog control: condense the translation, then tighten the voice-forge
-  timing, when the interpreter falls behind.
 - Any → any.

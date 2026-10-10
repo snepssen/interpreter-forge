@@ -23,10 +23,14 @@ class PiperTTS:
         self.voice = PiperVoice.load(path)
         self.sample_rate = self.voice.config.sample_rate
         self._inputs = {i.name for i in self.voice.session.get_inputs()}
-        self._gap = np.zeros(int(sentence_gap * self.sample_rate), np.float32)
+        self.sentence_gap = sentence_gap
 
-    def speak(self, text: str) -> np.ndarray:
+    def speak(self, text: str, pace: float = 1.0) -> np.ndarray:
+        """`pace` > 1 speaks faster. The graph rounds each phoneme up to a whole
+        frame, so it delivers about half of a small request and most of a large
+        one: x1.1 asked gives x1.05, x1.4 gives x1.35 on the voice-forge voice."""
         c = self.voice.config
+        gap = np.zeros(int(self.sentence_gap / pace * self.sample_rate), np.float32)
         parts: list[np.ndarray] = []
         for phonemes in self.voice.phonemize(text):
             if not phonemes:
@@ -35,7 +39,7 @@ class PiperTTS:
             args = {
                 "input": np.array([ids], np.int64),
                 "input_lengths": np.array([len(ids)], np.int64),
-                "scales": np.array([c.noise_scale, c.length_scale, c.noise_w_scale], np.float32),
+                "scales": np.array([c.noise_scale, c.length_scale / pace, c.noise_w_scale], np.float32),
             }
             if "vf_duration_factors" in self._inputs:
                 args["vf_duration_factors"] = np.ones((1, 1, len(ids)), np.float32)
@@ -44,6 +48,6 @@ class PiperTTS:
             if peak > 1e-8:
                 audio *= 0.9 / peak
             if parts:
-                parts.append(self._gap)
+                parts.append(gap)
             parts.append(audio)
         return np.concatenate(parts) if parts else np.zeros(0, np.float32)

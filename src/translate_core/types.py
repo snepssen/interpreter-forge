@@ -51,6 +51,8 @@ class Result:
     translation: str
     audio_seconds: float
     timing: Timing = field(default_factory=Timing)
+    brief: bool = False  # translated for the gist, to catch up
+    pace: float = 1.0  # spoken faster than normal by this factor
 
     @property
     def lag(self) -> float:
