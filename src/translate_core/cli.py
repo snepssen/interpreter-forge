@@ -21,6 +21,7 @@ def main() -> None:
     p.add_argument("--mt", default=MT_MODEL)
     p.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
     p.add_argument("--segment-only", action="store_true", help="stop after segmentation")
+    p.add_argument("--no-judge", action="store_true", help="segment on acoustics and punctuation alone")
     d = SegmenterConfig()
     p.add_argument("--hop", type=float, default=d.hop)
     p.add_argument("--long-pause", type=float, default=d.long_pause)
@@ -47,18 +48,25 @@ def main() -> None:
     asr = ParakeetASR(a.asr)
     asr.transcribe(np.zeros(audio.SAMPLE_RATE, np.float32))  # first call compiles kernels
 
-    info("segmenting")
-    segments = segment(source, asr, SileroVAD(), config, on_segment=show_segment)
-    if a.segment_only:
-        return
-
+    from .judge import CompletenessJudge
     from .translate import LLMTranslator
     from .tts import PiperTTS
 
-    info(f"loading {a.mt}")
-    translator = LLMTranslator(a.mt)
-    translator.translate("Hallo.")  # warm-up
-    translator.history.clear()
+    translator = judge = None
+    if not (a.segment_only and a.no_judge):
+        info(f"loading {a.mt}")
+        translator = LLMTranslator(a.mt)
+        translator.translate("Hallo.")  # warm-up
+        translator.history.clear()
+    if not a.no_judge:
+        judge = CompletenessJudge(translator.model, translator.tokenizer)
+        judge("Hallo")  # fills the cache with its instructions
+
+    info("segmenting" + ("" if a.no_judge else ", with the judge"))
+    segments = segment(source, asr, SileroVAD(), config, judge, on_segment=show_segment)
+    if a.segment_only:
+        return
+
     tts = PiperTTS(a.voice)
     tts.speak("Ready.")
 
@@ -108,7 +116,7 @@ def summarise(results: list[Result], duration: float) -> str:
     waits = [r.segment.decided_at - r.segment.end for r in results]
     queued = [r.timing.play_start - r.timing.tts_end for r in results]
     ms = lambda xs: f"{statistics.mean(xs) * 1000:.0f} ms"
-    reasons = {k: sum(r.segment.reason == k for r in results) for k in ("sentence", "pause", "clause", "force", "flush")}
+    reasons = {k: sum(r.segment.reason == k for r in results) for k in ("sentence", "judged", "pause", "clause", "force", "flush")}
     return "\n".join([
         f"segments      {len(results)}  ({', '.join(f'{k} {v}' for k, v in reasons.items() if v)})",
         f"lag           median {statistics.median(lags):.1f} s, max {max(lags):.1f} s  (source segment end → playback start)",

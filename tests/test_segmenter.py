@@ -136,3 +136,70 @@ def test_committed_word_reheard_differently_is_not_repeated():
     s.step(3.0, words("Meldet sich bitte bei mir"), silence=2.0)
     reheard = [Word("Mehr.", s.mark - 0.25, s.mark + 0.05), Word("Danke.", s.mark + 1.5, s.mark + 1.9)]
     assert [w.text for w in s.new_words(reheard)] == ["Danke."]
+
+
+class FakeJudge:
+    """Complete when the text ends in one of `complete_endings`; counts calls."""
+
+    def __init__(self, *complete_endings: str):
+        self.endings, self.asked = complete_endings, []
+
+    def __call__(self, text: str) -> bool:
+        self.asked.append(text)
+        return text.rstrip(".,").endswith(self.endings)
+
+
+def test_judge_commits_a_complete_thought_at_a_short_pause():
+    s = Segmenter(SegmenterConfig(adapt=False), judge=FakeJudge("anfangen"))
+    hyp = words("dass wir um zehn anfangen.")
+    assert s.step(2.5, hyp, silence=0.0) == []
+    [seg] = s.step(3.0, hyp, silence=0.5)
+    assert seg.reason == "judged"
+
+
+def test_judge_holds_a_clause_still_waiting_for_its_verb():
+    s = Segmenter(SegmenterConfig(adapt=False), judge=FakeJudge("anfangen"))
+    hyp = words("dass wir morgen nicht um neun.")
+    s.step(2.5, hyp, silence=0.0)
+    assert s.step(3.0, hyp, silence=0.5) == []
+
+
+def test_judge_is_not_asked_about_unstable_words_or_twice_about_the_same():
+    judge = FakeJudge()
+    s = Segmenter(SegmenterConfig(adapt=False), judge=judge)
+    s.step(2.5, words("dass wir morgen"), silence=0.5)
+    assert judge.asked == []
+    hyp = words("dass wir morgen nicht")
+    s.step(3.0, hyp, silence=0.5)
+    s.step(3.5, hyp, silence=0.5)
+    s.step(4.0, hyp, silence=0.6)
+    assert judge.asked == ["dass wir morgen nicht"]
+
+
+def test_judge_vetoes_a_comma_cut_that_would_strand_the_verb():
+    s = Segmenter(SegmenterConfig(adapt=False, soft_segment=4.0), judge=FakeJudge("gemacht"))
+    hyp = words("weil wir das morgen um neun, und nicht später gemacht haben wollten und so")
+    s.step(5.0, hyp, silence=0.0)
+    assert s.step(5.5, hyp, silence=0.0) == []
+
+
+def test_forced_cut_prefers_the_point_the_judge_accepts():
+    judge = FakeJudge("gemacht")
+    s = Segmenter(SegmenterConfig(adapt=False, soft_segment=3.0, max_segment=4.0), judge=judge)
+    # Widest gap is after "es" (0.5 s); the judge only accepts the cut after "gemacht" (0.3 s).
+    hyp = (words("wir haben das alles gestern gemacht") + words("weil es", start=2.6)
+           + words("nötig war und dann noch", start=3.8))
+    s.step(6.0, hyp, silence=0.0)
+    [seg] = s.step(6.5, hyp, silence=0.0)
+    assert seg.reason == "force" and seg.text == "wir haben das alles gestern gemacht"
+
+
+def test_forced_cut_waits_rather_than_cut_where_the_judge_refuses():
+    s = Segmenter(SegmenterConfig(adapt=False, soft_segment=3.0, max_segment=4.0), judge=FakeJudge())
+    hyp = words("wir haben das alles gestern gemacht weil es nötig war und dann noch so")  # 5.5 s
+    s.step(6.0, hyp, silence=0.0)
+    assert s.step(6.5, hyp, silence=0.0) == []
+    hyp = words("wir haben das alles gestern gemacht weil es nötig war und dann noch so und weiter")  # 6.3 s
+    s.step(7.0, hyp, silence=0.0)
+    [seg] = s.step(7.5, hyp, silence=0.0)  # past 1.5 x max_segment
+    assert seg.reason == "force"

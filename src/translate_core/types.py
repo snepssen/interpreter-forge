@@ -16,7 +16,7 @@ class Segment:
 
     index: int
     words: list[Word]
-    reason: str  # "sentence", "pause", "clause", "force" or "flush"
+    reason: str  # "sentence", "judged", "pause", "clause", "force" or "flush"
     decided_at: float  # stream time at which the commit decision existed
 
     @property

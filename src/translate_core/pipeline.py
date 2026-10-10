@@ -24,10 +24,20 @@ from .vad import SileroVAD
 
 def segment(
     audio: np.ndarray, asr: ParakeetASR, vad: SileroVAD, config: SegmenterConfig,
+    judge: Callable[[str], bool] | None = None,
     on_segment: Callable[[Segment, float], None] = lambda s, ms: None,
 ) -> list[tuple[Segment, float]]:
     """Walk the stream hop by hop; returns each committed segment with its ASR ms."""
-    seg = Segmenter(config)
+    judging = 0.0  # judge time spent this hop; it holds up the decision like ASR does
+
+    def timed(text: str) -> bool:
+        nonlocal judging
+        t0 = perf_counter()
+        verdict = judge(text)
+        judging += perf_counter() - t0
+        return verdict
+
+    seg = Segmenter(config, timed if judge else None)
     sr, frame, hop = SAMPLE_RATE, SileroVAD.FRAME, int(config.hop * SAMPLE_RATE)
     out: list[tuple[Segment, float]] = []
     vad_pos, asr_free, asr_ms = 0, 0.0, 0.0
@@ -50,7 +60,10 @@ def segment(
         asr_free = max(now, asr_free) + took  # a pass can't start before the last one ends
 
         silence = vad.silence(now)
-        for s in seg.step(now, words, silence):
+        judging = 0.0
+        committed = seg.step(now, words, silence)
+        asr_free += judging
+        for s in committed:
             s.decided_at = asr_free
             out.append((s, asr_ms))
             on_segment(s, asr_ms)

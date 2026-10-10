@@ -10,11 +10,16 @@ passes, and only at a point where cutting is safe:
             and a hesitation mid-clause is enough to earn one ("dass wir.");
             once the speaker carries on, the re-read across the pause drops it.
             So a mark only counts when there is speech on its far side.
+  judged    a short pause after stable speech, and the judge (a yes/no from
+            the LLM) says what was said can be translated on its own. Saves
+            waiting for the next words or a long pause.
   pause     the speaker has been silent long enough that whatever was said is
             all there is.
-  clause    a long run without a sentence end; cut at its latest comma.
-  force     longer still and no comma; cut at the widest gap rather than
-            let lag grow without bound.
+  clause    a long run without a sentence end; cut at its latest comma, if
+            the judge agrees the words before it stand alone.
+  force     longer still; cut where the judge accepts (all of it, a comma, a
+            wide gap). If it accepts nothing, wait, up to 1.5x as long, then
+            cut at the widest gap rather than let lag grow without bound.
 
 The long pause stretches to fit the speaker: the gaps inside committed
 sentences tell us how long this person hesitates mid-thought.
@@ -22,6 +27,7 @@ sentences tell us how long this person hesitates mid-thought.
 
 import re
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -56,11 +62,15 @@ class SegmenterConfig:
     min_words: int = 3  # shorter sentences wait to join the next one
     adapt: bool = True  # stretch the long pause to the speaker's hesitations
     max_long_pause: float = 3.0  # ceiling on the adapted long pause
+    judge_pause: float = 0.4  # silence after which the judge is asked
+    judge_tries: int = 3  # candidate cut points put to the judge per decision
 
 
 class Segmenter:
-    def __init__(self, config: SegmenterConfig | None = None):
+    def __init__(self, config: SegmenterConfig | None = None, judge: Callable[[str], bool] | None = None):
         self.config = config or SegmenterConfig()
+        self.judge = judge  # "can this be translated on its own yet?"
+        self._verdicts: dict[str, bool] = {}
         self.mark = 0.0  # stream time up to which everything is committed
         self._previous: list[Word] = []
         self._last: Word | None = None  # the last committed word
@@ -128,15 +138,43 @@ class Segmenter:
             if ends_sentence(words[i].text) and i + 1 >= self.config.min_words:
                 return i + 1, "sentence"
 
+        c = self.config
+        if (self.judge and silence >= c.judge_pause and stable == len(words)
+                and len(words) >= c.min_words and self._complete(words)):
+            return len(words), "judged"
+
         span = words[-1].end - words[0].start
-        if span >= self.config.soft_segment and (cut := _clause_cut(words, stable)):
+        if span >= c.soft_segment and (cut := self._first_complete(words, _clause_cuts(words, stable))):
             return cut, "clause"
-        if span >= self.config.max_segment and stable >= 2:
-            return _force_cut(words, stable), "force"
-        if span >= self.config.max_segment * 1.5:  # never settles: cut what we have
-            return _force_cut(words, len(words)), "force"
+        if span >= c.max_segment and stable >= 2:
+            cuts = _clause_cuts(words, stable) + _gap_cuts(words, stable)
+            if not self.judge:
+                return (cuts[0] if cuts else stable - 1), "force"
+            # No cut it accepts: better late than wrong, up to the cap below.
+            if cut := self._first_complete(words, [stable] + cuts):
+                return cut, "force"
+        if span >= c.max_segment * 1.5:  # never settles: cut what we have
+            cuts = _clause_cuts(words, len(words)) + _gap_cuts(words, len(words))
+            return (cuts[0] if cuts else len(words)), "force"
 
         return 0, ""
+
+    def _first_complete(self, words: list[Word], cuts: list[int]) -> int:
+        """The first cut whose words stand alone; without a judge, simply the first."""
+        if not self.judge:
+            return cuts[0] if cuts else 0
+        for cut in cuts[: self.config.judge_tries]:
+            if self._complete(words[:cut]):
+                return cut
+        return 0
+
+    def _complete(self, words: list[Word]) -> bool:
+        text = " ".join(w.text for w in words)
+        if text not in self._verdicts:
+            if len(self._verdicts) > 256:
+                self._verdicts.clear()
+            self._verdicts[text] = self.judge(text)
+        return self._verdicts[text]
 
     def _commit(self, words: list[Word], reason: str, now: float) -> Segment:
         for a, b in zip(words, words[1:]):
@@ -158,20 +196,16 @@ def _common_prefix(a: list[Word], b: list[Word]) -> int:
     return n
 
 
-def _clause_cut(words: list[Word], stable: int) -> int:
-    """Cut after the latest clause mark in the stable words, if one leaves a real piece."""
-    for i in range(stable - 2, -1, -1):
-        if words[i].text.endswith(CLAUSE_END) and _long_enough(words, i):
-            return i + 1
-    return 0
+def _clause_cuts(words: list[Word], stable: int) -> list[int]:
+    """Cuts after clause marks in the first `stable` words, latest first."""
+    return [i + 1 for i in range(stable - 2, -1, -1)
+            if words[i].text.endswith(CLAUSE_END) and _long_enough(words, i)]
 
 
-def _force_cut(words: list[Word], stable: int) -> int:
-    """Cut inside the first `stable` words: a clause mark, else the widest gap."""
-    if cut := _clause_cut(words, stable):
-        return cut
+def _gap_cuts(words: list[Word], stable: int) -> list[int]:
+    """Cuts at the gaps between the first `stable` words, widest first."""
     gaps = [(words[i + 1].start - words[i].end, i) for i in range(stable - 1) if _long_enough(words, i)]
-    return max(gaps)[1] + 1 if gaps else max(stable - 1, 1)
+    return [i + 1 for _, i in sorted(gaps, reverse=True)]
 
 
 def _long_enough(words: list[Word], i: int) -> bool:
