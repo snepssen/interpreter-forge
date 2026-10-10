@@ -56,6 +56,7 @@ there is speech on its far side.
     scripts/fetch-models.sh                       # the translation model, into models/
     scripts/make-samples.sh                       # synthetic test speech, macOS `say`
     uv run translate-core file samples/de_halting.wav       # simulated clock → runs/de_halting/
+    uv run translate-core file recordings/*.m4a              # several at once, with a comparison table
     uv run translate-core live --from samples/de_halting.wav  # real time → runs/live-de_halting/
     uv run translate-core live                               # your mic → your headphones
     uv run pytest

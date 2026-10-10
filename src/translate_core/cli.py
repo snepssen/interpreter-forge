@@ -20,7 +20,7 @@ def main() -> None:
     sub = p.add_subparsers(dest="command", required=True)
 
     f = sub.add_parser("file", help="a recording through the pipeline on a simulated clock")
-    f.add_argument("input", type=Path, help="any audio file ffmpeg can read")
+    f.add_argument("inputs", type=Path, nargs="+", metavar="input", help="audio files ffmpeg can read (wav, m4a, mp3, ...)")
     f.add_argument("--segment-only", action="store_true", help="stop after segmentation")
 
     live = sub.add_parser("live", help="microphone to headphones (or a recording, in real time)")
@@ -30,7 +30,7 @@ def main() -> None:
     live.add_argument("--speaker", help="output device (index or name); default: the system's")
 
     for s in (f, live):
-        s.add_argument("--out", type=Path, help="run directory (default: runs/<name>)")
+        s.add_argument("--out", type=Path, help="run directory (default: runs/<name>; with several inputs, the parent)")
         s.add_argument("--asr", default=ASR_MODEL)
         s.add_argument("--mt", default=MT_MODEL)
         s.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
@@ -100,29 +100,40 @@ def run_file(a) -> None:
     from .pipeline import interpret, render, segment
     from .vad import SileroVAD
 
-    out = a.out or Path("runs") / a.input.stem
-    out.mkdir(parents=True, exist_ok=True)
-    source = audio.load(a.input)
-    info(f"{a.input.name}: {len(source) / audio.SAMPLE_RATE:.1f} s")
     asr, translator, judge, tts = load_models(a, need_translator=not a.segment_only)
+    table = []
+    for path in a.inputs:
+        out = (a.out / path.stem if len(a.inputs) > 1 else a.out) if a.out else Path("runs") / path.stem
+        out.mkdir(parents=True, exist_ok=True)
+        source = audio.load(path)
+        seconds = len(source) / audio.SAMPLE_RATE
+        info(f"{path.name}: {seconds:.1f} s, segmenting" + ("" if a.no_judge else " with the judge"))
+        segments = segment(source, asr, SileroVAD(), a.config, judge, on_segment=show_segment)
+        if a.segment_only:
+            continue
 
-    info("segmenting" + ("" if a.no_judge else ", with the judge"))
-    segments = segment(source, asr, SileroVAD(), a.config, judge, on_segment=show_segment)
-    if a.segment_only:
-        return
+        info("interpreting")
+        translator.reset()
+        results, clips = interpret(segments, translator, tts, backlog(a), on_result=show_result)
 
-    info("interpreting")
-    results, clips = interpret(segments, translator, tts, backlog(a), on_result=show_result)
+        placed = [(r.timing.play_start, clip) for r, clip in zip(results, clips)]
+        audio.write(out / "listen.wav", render(source, placed, tts.sample_rate), tts.sample_rate)
+        with open(out / "trace.jsonl", "w") as fh:
+            for r in results:
+                fh.write(json.dumps(trace(r), ensure_ascii=False) + "\n")
+        summary = summarise(results, seconds)
+        (out / "summary.txt").write_text(summary + "\n")
+        print("\n" + summary + "\n")
+        info(f"wrote {out}/listen.wav (L: speaker, R: interpreter), trace.jsonl, summary.txt")
+        if results:
+            lags = [r.lag for r in results]
+            table.append((path.name, seconds, len(results), statistics.median(lags), max(lags)))
 
-    placed = [(r.timing.play_start, clip) for r, clip in zip(results, clips)]
-    audio.write(out / "listen.wav", render(source, placed, tts.sample_rate), tts.sample_rate)
-    with open(out / "trace.jsonl", "w") as fh:
-        for r in results:
-            fh.write(json.dumps(trace(r), ensure_ascii=False) + "\n")
-    summary = summarise(results, len(source) / audio.SAMPLE_RATE)
-    (out / "summary.txt").write_text(summary + "\n")
-    print("\n" + summary)
-    info(f"wrote {out}/listen.wav (L: speaker, R: interpreter), trace.jsonl, summary.txt")
+    if len(table) > 1:
+        width = max(len(row[0]) for row in table)
+        print(f"{'':{width}}  length  pieces  median lag  max lag")
+        for name, seconds, n, median, worst in table:
+            print(f"{name:{width}}  {seconds:5.1f}s  {n:6d}  {median:9.1f}s  {worst:6.1f}s")
 
 
 def show_segment(s: Segment, asr_ms: float) -> None:
