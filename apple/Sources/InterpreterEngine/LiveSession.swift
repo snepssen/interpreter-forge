@@ -1,0 +1,162 @@
+import Foundation
+import InterpreterCore
+import Observation
+
+/// Everything the app shows and controls, on the main actor. The Mac app and,
+/// later, the iPhone app are views of this.
+@MainActor @Observable
+public final class LiveSession {
+    public enum Phase: Equatable {
+        case idle
+        case loading(String)
+        case ready
+        case live
+        case failed(String)
+    }
+
+    /// One piece of speech and what became of it.
+    public struct Line: Identifiable, Equatable {
+        public let id: Int
+        public var source: String
+        public var reason: String
+        public var translation: String?
+        public var silence: Silence?
+        public var lag: Double?
+        public var brief = false
+        public var pace = 1.0
+        public var at: Date
+    }
+
+    public private(set) var phase: Phase = .idle
+    public private(set) var lines: [Line] = []
+    public private(set) var hearing = ""
+    public private(set) var level: Float = 0
+    public private(set) var notice: String?
+
+    /// Spoken here; anything else is taken as misheard. English is understood
+    /// by the listener and kept as context, not spoken.
+    public var languages = ["en", "pl", "hu", "nl"]
+    /// Device names (or part of them); nil for the system's.
+    public var microphone: String?
+    public var speaker: String?
+
+    private var recognizer: Recognizer?
+    private var linguist: Linguist?
+    private var voice: Voice?
+    private var pipeline: Pipeline?
+    private var meter: Task<Void, Never>?
+    private var loadedLanguages: [String] = []
+
+    public init() {}
+
+    public var isLive: Bool { phase == .live }
+
+    /// Load the three models; the first run downloads Parakeet (a few hundred MB).
+    public func prepare() async {
+        guard phase == .idle || phase.isFailure || loadedLanguages != languages else { return }
+        do {
+            guard let model = Resources.translationModel else {
+                throw Problem("No translation model. Run scripts/fetch-models.sh, or put Qwen3-4B-Instruct-2507 (4-bit MLX) in ~/Library/Application Support/Interpreter/Models.")
+            }
+            guard let voiceURL = Resources.voice, let espeak = Resources.espeakData else {
+                throw Problem("No voice. Build with build.sh, or keep voice-forge beside translate-core.")
+            }
+            phase = .loading("Loading speech recognition…")
+            recognizer = try await Recognizer.load(languages: languages) { fraction in
+                Task { @MainActor in
+                    if case .loading = self.phase, fraction < 1 {
+                        self.phase = .loading("Downloading speech recognition… \(Int(fraction * 100))%")
+                    }
+                }
+            }
+            phase = .loading("Loading the translation model…")
+            linguist = try await Linguist(model: model, languages: languages)
+            phase = .loading("Loading the voice…")
+            voice = try Voice(model: voiceURL, espeakData: espeak)
+            phase = .loading("Warming up…")
+            try await linguist?.warmUp()
+            loadedLanguages = languages
+            phase = .ready
+        } catch {
+            phase = .failed(error.localizedDescription)
+        }
+    }
+
+    public func start() async {
+        if phase != .ready { await prepare() }
+        guard phase == .ready, let recognizer, let linguist, let voice, let vad = Resources.vad else {
+            if Resources.vad == nil { phase = .failed("No voice activity model (models/silero_vad.onnx).") }
+            return
+        }
+        let pipeline = Pipeline(recognizer: recognizer, linguist: linguist, voice: voice, vad: vad)
+        do {
+            try pipeline.start(microphone: microphone, speaker: speaker) { event in
+                Task { @MainActor in self.apply(event) }
+            }
+        } catch {
+            phase = .failed("Couldn't open the audio: \(error.localizedDescription)")
+            return
+        }
+        self.pipeline = pipeline
+        notice = nil
+        phase = .live
+        meter = Task { [weak self] in
+            while !Task.isCancelled {
+                self?.level = pipeline.level
+                try? await Task.sleep(for: .milliseconds(80))
+            }
+        }
+    }
+
+    public func stop() {
+        pipeline?.stop()
+        pipeline = nil
+        meter?.cancel()
+        level = 0
+        hearing = ""
+        if phase == .live { phase = .ready }
+    }
+
+    public func clear() { lines.removeAll() }
+
+    private func apply(_ event: PipelineEvent) {
+        switch event {
+        case .hearing(let text):
+            hearing = text
+        case .committed(let segment):
+            lines.append(Line(id: segment.index, source: segment.text, reason: segment.reason, at: Date()))
+        case .silent(let index, let why, let translation):
+            update(index) {
+                $0.silence = why
+                $0.translation = translation
+            }
+        case .interpreted(let indices, let translation, _, let lags, let brief, let pace):
+            // Merged pieces become one line, under the first.
+            let merged = lines.filter { indices.dropFirst().contains($0.id) }.map(\.source)
+            lines.removeAll { indices.dropFirst().contains($0.id) }
+            update(indices[0]) {
+                $0.source = ([$0.source] + merged).joined(separator: " ")
+                $0.translation = translation
+                $0.lag = lags.max()
+                $0.brief = brief
+                $0.pace = pace
+            }
+        case .failed(let message):
+            notice = message
+        }
+    }
+
+    private func update(_ index: Int, _ change: (inout Line) -> Void) {
+        guard let i = lines.lastIndex(where: { $0.id == index }) else { return }
+        change(&lines[i])
+    }
+}
+
+extension LiveSession.Phase {
+    var isFailure: Bool { if case .failed = self { true } else { false } }
+}
+
+struct Problem: LocalizedError {
+    let errorDescription: String?
+    init(_ message: String) { errorDescription = message }
+}

@@ -10,3 +10,4 @@ recordings/
 .build/
 .swiftpm/
 *.xcresult
+Interpreter.app/

@@ -18,6 +18,35 @@ First target: **any European language → English**, on an Apple Silicon Mac.
 | translate | Qwen3-4B-Instruct-2507, 4-bit MLX, carrying the last three pieces as context |
 | speak     | Piper; defaults to the voice-forge voice next door in `../voice-forge` |
 
+## The Mac app
+
+`apple/` is the native app the Python here measures for: SwiftUI, macOS 14+,
+with the same core shared by the iPhone app to come.
+
+    scripts/fetch-models.sh        # the translation model, if not done already
+    apple/build.sh                 # checks, then apple/Interpreter.app
+
+Press **Live** (or Space) and the feed fills with what is said around you,
+translated, with each line's lag; English is shown dimmed and kept quiet. Pick
+the languages spoken here, the mic (an iPhone on the table through Continuity
+hears the room better than AirPods) and the output from the top bar. The
+first launch downloads Parakeet (a few hundred MB).
+
+| | Python (MLX) | Swift app |
+|---|---|---|
+| speech recognition | MLX on the GPU, 300–800 ms a pass | FluidAudio on the Neural Engine, 75–161 ms |
+| translation | Qwen3-4B, MLX | the same model, MLX Swift, ~1 s |
+| voice | Piper (onnxruntime) | voice-forge's phonemizer, Piper on ONNX Runtime |
+| scheduling | translation first: one GPU | side by side: ASR on the Neural Engine, translation on the GPU |
+
+`InterpreterCore` is the Python logic ported (segmenter, clock times, language
+evidence, echoes, catch-up); `tccheck` asks every Python test again and gets
+the same answers. `tcrun <audio>` plays a recording through the real Swift
+pipeline at speaking pace and prints each piece with its lag, as `live --from`
+does here. Measured that way, German median lag is 3.7 s in both, and the
+fast Polish and Hungarian stretch of the kitchen recording 4.4 s in Swift
+against 4.8 s in Python.
+
 ## Deciding when a thought is complete
 
 This is the part the rest hangs on. The ASR re-reads everything after the last
@@ -193,4 +222,7 @@ vor`, `kwart voor`). Held-out times in seven languages: 14 of 14.
 
 ## Not yet
 
+- The iPhone app: the engine targets iOS 17, but espeak-ng is vendored as a
+  macOS library and needs an iOS build, and a 4B model needs a higher-memory
+  iPhone.
 - Any → any.

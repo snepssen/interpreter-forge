@@ -58,8 +58,9 @@ struct Key: Hashable {
 
 public final class Segmenter {
     public let config: SegmenterConfig
-    /// "Can this be translated on its own yet?"
-    public var judge: ((String) -> Bool)?
+    /// "Can this be translated on its own yet?" Asynchronous, because in the
+    /// app it is the translation model, behind the actor that owns it.
+    public var judge: (@Sendable (String) async -> Bool)?
     public var mark = 0.0  // stream time up to which everything is committed
     public private(set) var pending: [Word] = []  // the latest hypothesis for what is not committed
     private var last: Word?  // the last committed word
@@ -67,7 +68,7 @@ public final class Segmenter {
     private var verdicts: [String: Bool] = [:]
     private var count = 0
 
-    public init(config: SegmenterConfig = SegmenterConfig(), judge: ((String) -> Bool)? = nil) {
+    public init(config: SegmenterConfig = SegmenterConfig(), judge: (@Sendable (String) async -> Bool)? = nil) {
         self.config = config
         self.judge = judge
     }
@@ -93,7 +94,7 @@ public final class Segmenter {
     /// Advance with the latest hypothesis for the uncommitted tail. `words` must
     /// already be filtered by `newWords`; `silence` is how long the VAD has heard
     /// no speech, as of `now`.
-    public func step(now: Double, words: [Word], silence: Double) -> [Segment] {
+    public func step(now: Double, words: [Word], silence: Double) async -> [Segment] {
         var words = words
         var agreed = Self.agreed(pending, words)
         var segments: [Segment] = []
@@ -101,7 +102,7 @@ public final class Segmenter {
             // The VAD can go on hearing "speech" (noise, a faint voice) long after
             // the last word anyone could transcribe; that is a pause too.
             let heardGap = now - words[words.count - 1].end
-            let (cut, reason) = decide(words, agreed, silence, heardGap)
+            let (cut, reason) = await decide(words, agreed, silence, heardGap)
             if cut == 0 { break }
             segments.append(commit(Array(words[..<cut]), reason, now))
             words = Array(words[cut...])
@@ -123,7 +124,7 @@ public final class Segmenter {
     }
 
     private func decide(_ words: [Word], _ agreed: [Bool], _ silence: Double,
-                        _ heardGap: Double) -> (Int, String) {
+                        _ heardGap: Double) async -> (Int, String) {
         let c = config
         if max(silence, heardGap) >= longPauseThreshold() { return (words.count, "pause") }
 
@@ -138,20 +139,20 @@ public final class Segmenter {
         }
 
         if judge != nil, silence >= c.judgePause, stable == words.count, words.count >= c.minWords,
-           complete(words) {
+           await complete(words) {
             return (words.count, "judged")
         }
 
         let span = words[words.count - 1].end - words[0].start
         if span >= c.softSegment {
-            let cut = firstComplete(words, Self.clauseCuts(words, stable))
+            let cut = await firstComplete(words, Self.clauseCuts(words, stable))
             if cut > 0 { return (cut, "clause") }
         }
         if span >= c.maxSegment && stable >= 2 {
             let cuts = Self.clauseCuts(words, stable) + Self.gapCuts(words, stable)
             guard judge != nil else { return (cuts.first ?? stable - 1, "force") }
             // No cut it accepts: better late than wrong, up to the cap below.
-            let cut = firstComplete(words, [stable] + cuts)
+            let cut = await firstComplete(words, [stable] + cuts)
             if cut > 0 { return (cut, "force") }
         }
         if span >= c.hardSegment {  // never settles, or nothing acceptable: cut what we have
@@ -162,16 +163,19 @@ public final class Segmenter {
     }
 
     /// The first cut whose words stand alone; without a judge, simply the first.
-    private func firstComplete(_ words: [Word], _ cuts: [Int]) -> Int {
+    private func firstComplete(_ words: [Word], _ cuts: [Int]) async -> Int {
         guard judge != nil else { return cuts.first ?? 0 }
-        return cuts.prefix(config.judgeTries).first { complete(Array(words[..<$0])) } ?? 0
+        for cut in cuts.prefix(config.judgeTries) where await complete(Array(words[..<cut])) {
+            return cut
+        }
+        return 0
     }
 
-    private func complete(_ words: [Word]) -> Bool {
+    private func complete(_ words: [Word]) async -> Bool {
         let text = words.map(\.text).joined(separator: " ")
         if let verdict = verdicts[text] { return verdict }
         if verdicts.count > 256 { verdicts.removeAll() }
-        let verdict = judge?(text) ?? true
+        let verdict = await judge?(text) ?? true
         verdicts[text] = verdict
         return verdict
     }
