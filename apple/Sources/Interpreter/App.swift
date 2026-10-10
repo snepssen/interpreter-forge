@@ -1,4 +1,5 @@
 import InterpreterEngine
+import InterpreterUI
 import SwiftUI
 
 @main

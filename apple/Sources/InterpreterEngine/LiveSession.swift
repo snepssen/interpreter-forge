@@ -56,8 +56,11 @@ public final class LiveSession {
     public func prepare() async {
         guard phase == .idle || phase.isFailure || loadedLanguages != languages else { return }
         do {
-            guard let model = Resources.translationModel else {
-                throw Problem("No translation model. Run scripts/fetch-models.sh, or put Qwen3-4B-Instruct-2507 (4-bit MLX) in ~/Library/Application Support/Interpreter/Models.")
+            if Resources.translationModel == nil { phase = .loading("Downloading the translation model…") }
+            let model = try await ModelStore.translationModel { fraction in
+                Task { @MainActor in
+                    self.phase = .loading("Downloading the translation model… \(Int(fraction * 100))% of 2.3 GB")
+                }
             }
             guard let voiceURL = Resources.voice, let espeak = Resources.espeakData else {
                 throw Problem("No voice. Build with build.sh, or keep voice-forge beside translate-core.")

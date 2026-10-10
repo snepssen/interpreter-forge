@@ -1,12 +1,15 @@
 // swift-tools-version: 6.0
-import Foundation
 import PackageDescription
-
-let espeakLib = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "Sources/CEspeakNG/lib").path
 
 let package = Package(
     name: "Interpreter",
     platforms: [.macOS(.v14), .iOS(.v17)],
+    products: [
+        // For the iPhone app's Xcode project.
+        .library(name: "InterpreterEngine", targets: ["InterpreterEngine"]),
+        .library(name: "InterpreterCore", targets: ["InterpreterCore"]),
+        .library(name: "InterpreterUI", targets: ["InterpreterUI"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.17.7"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.32.3"),
@@ -21,9 +24,9 @@ let package = Package(
         .target(name: "InterpreterCore"),
         // Never links a model; `swift run tccheck` stays fast and runs anywhere.
         .executableTarget(name: "tccheck", dependencies: ["InterpreterCore"]),
-        // Headers and the vendored static espeak-ng, copied from voice-forge.
-        .target(name: "CEspeakNG",
-                linkerSettings: [.unsafeFlags(["-L\(espeakLib)", "-lespeak-ng", "-lucd"])]),
+        // espeak-ng at piper1-gpl's commit, for macOS, iOS and the simulator
+        // (scripts/build-espeak.sh); phonemes identical to voice-forge's library.
+        .binaryTarget(name: "CEspeakNG", path: "Frameworks/CEspeakNG.xcframework"),
         // NSException to NSError, for AVAudioEngine, which raises instead of throwing.
         .target(name: "ObjCExceptions"),
         // The models and the live loop: Parakeet and VAD (FluidAudio, ONNX),
@@ -38,7 +41,9 @@ let package = Package(
             .product(name: "Tokenizers", package: "swift-transformers"),
             .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
         ]),
-        .executableTarget(name: "Interpreter", dependencies: ["InterpreterCore", "InterpreterEngine"]),
+        // The views, shared by the Mac app and the iPhone app.
+        .target(name: "InterpreterUI", dependencies: ["InterpreterCore", "InterpreterEngine"]),
+        .executableTarget(name: "Interpreter", dependencies: ["InterpreterEngine", "InterpreterUI"]),
         // A recording through the live pipeline in real time, for measuring.
         .executableTarget(name: "tcrun", dependencies: [
             "InterpreterCore", "InterpreterEngine", .product(name: "FluidAudio", package: "FluidAudio"),

@@ -220,6 +220,27 @@ public final class Speaker: @unchecked Sendable {
     }
 }
 
+#if os(iOS)
+/// The phone's own microphone hears the room; AirPods, if connected, are only
+/// for listening, over A2DP, so they stay in full quality rather than drop to
+/// call quality. Without headphones the interpreter speaks from the speaker,
+/// and since what it says is English, the gate keeps the echo quiet.
+public enum PhoneAudio {
+    public static func activate() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .defaultToSpeaker])
+        if let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+            try session.setPreferredInput(builtIn)
+        }
+        try session.setActive(true)
+    }
+
+    public static func deactivate() {
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+}
+#endif
+
 #if os(macOS)
 /// Core Audio devices by name, so a mic can be chosen without changing the
 /// system default: an iPhone on the table through Continuity, AirPods only for

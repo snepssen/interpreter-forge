@@ -1,0 +1,49 @@
+# The iPhone app. `xcodegen` turns this into Interpreter.xcodeproj (not kept in
+# git); build-ios.sh does that, stages the bundled data, builds and installs.
+name: Interpreter
+options:
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  InterpreterPackage:
+    path: ..
+targets:
+  Interpreter:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Resources/en_US-snepssen-medium.onnx
+        buildPhase: resources
+      - path: Resources/en_US-snepssen-medium.onnx.json
+        buildPhase: resources
+      - path: Resources/silero_vad.onnx
+        buildPhase: resources
+      - path: Resources/espeak-ng-data
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: InterpreterPackage
+        product: InterpreterUI
+      - package: InterpreterPackage
+        product: InterpreterEngine
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Interpreter
+        NSMicrophoneUsageDescription: Interpreter listens to the conversation around you to translate it into English, on this iPhone.
+        UIBackgroundModes: [audio]
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.snepssen.interpreter
+        DEVELOPMENT_TEAM: BAZ45QTU23
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Interpreter.entitlements
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"

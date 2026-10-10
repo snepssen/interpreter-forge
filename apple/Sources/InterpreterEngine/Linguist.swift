@@ -32,7 +32,12 @@ public actor Linguist {
     private let no: [Int32]
 
     public init(model directory: URL, languages: [String]) async throws {
-        MLX.GPU.set(cacheLimit: 1 << 30)  // variable shapes otherwise grow it without bound
+        // Variable shapes otherwise grow MLX's cache without bound; a phone has less to spare.
+        #if os(iOS)
+        MLX.GPU.set(cacheLimit: 256 << 20)
+        #else
+        MLX.GPU.set(cacheLimit: 1 << 30)
+        #endif
         let context = try await loadModel(from: directory, using: #huggingFaceTokenizerLoader())
         yes = Self.firstTokens(context.tokenizer, ["yes", "Yes", " yes", " Yes"])
         no = Self.firstTokens(context.tokenizer, ["no", "No", " no", " No"])

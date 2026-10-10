@@ -48,6 +48,9 @@ public final class Pipeline: @unchecked Sendable {
 
     public func start(microphone device: String?, speaker output: String?,
                       events: @escaping @Sendable (PipelineEvent) -> Void) throws {
+        #if os(iOS)
+        try PhoneAudio.activate()
+        #endif
         try start(source: Microphone(device: device), speaker: output, audible: true, events: events)
     }
 
@@ -71,6 +74,9 @@ public final class Pipeline: @unchecked Sendable {
         Task { await inbox.close() }
         source?.stop()
         speaker?.stop()
+        #if os(iOS)
+        PhoneAudio.deactivate()
+        #endif
     }
 
     /// Wait until a recording has been heard to the end and everything in it said.

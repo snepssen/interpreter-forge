@@ -2,11 +2,15 @@ import InterpreterCore
 import InterpreterEngine
 import SwiftUI
 
-struct ContentView: View {
+/// The whole app, on a Mac or an iPhone: what is said, translated, as it comes.
+public struct ContentView: View {
     @Bindable var session: LiveSession
     @State private var showEnglish = true
 
-    var body: some View {
+    public init(session: LiveSession) { self.session = session }
+
+    public var body: some View {
+        #if os(macOS)
         VStack(spacing: 0) {
             controls
             Divider()
@@ -15,10 +19,28 @@ struct ContentView: View {
             listening
         }
         .background(Color(nsColor: .textBackgroundColor))
+        #else
+        VStack(spacing: 0) {
+            HStack {
+                LanguageMenu(languages: $session.languages, disabled: session.isLive)
+                Spacer()
+                Toggle("English", isOn: $showEnglish).fixedSize()
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 16).padding(.vertical, 10)
+            Divider()
+            feed
+            Divider()
+            listening
+            LiveButton(session: session, large: true)
+                .padding(.horizontal, 16).padding(.bottom, 12)
+        }
+        #endif
     }
 
     // MARK: top
 
+    #if os(macOS)
     private var controls: some View {
         HStack(spacing: 14) {
             LiveButton(session: session)
@@ -37,6 +59,7 @@ struct ContentView: View {
         }
         .padding(14)
     }
+    #endif
 
     // MARK: middle
 
@@ -71,7 +94,7 @@ struct ContentView: View {
                 Label(why, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
                 Button("Try again") { Task { await session.prepare() } }
             case .ready:
-                Text("Press Live and put your headphones on.").font(.title3)
+                Text("Press Live and put your headphones in.").font(.title3)
                 Text("Speech in \(Languages.list(session.languages.filter { $0 != "en" })) is interpreted into English as it comes; English is left alone.")
                     .foregroundStyle(.secondary)
             default:
@@ -112,6 +135,7 @@ struct ContentView: View {
 /// The one control that matters.
 struct LiveButton: View {
     let session: LiveSession
+    var large = false
 
     var body: some View {
         Button {
@@ -119,10 +143,12 @@ struct LiveButton: View {
         } label: {
             HStack(spacing: 8) {
                 Circle().fill(session.isLive ? Color.red : Color.secondary.opacity(0.5)).frame(width: 12, height: 12)
-                Text(session.isLive ? "Stop" : "Live").font(.headline)
+                Text(session.isLive ? "Stop" : "Live").font(large ? .title3.bold() : .headline)
             }
-            .padding(.horizontal, 18).padding(.vertical, 10)
+            .frame(maxWidth: large ? .infinity : nil)
+            .padding(.horizontal, 18).padding(.vertical, large ? 16 : 10)
             .background(session.isLive ? Color.red.opacity(0.12) : Color.accentColor.opacity(0.12), in: Capsule())
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .disabled(!(session.phase == .ready || session.isLive))
@@ -188,12 +214,16 @@ struct LanguageMenu: View {
         } label: {
             Text(Languages.list(languages.filter { $0 != "en" }).ifEmpty("Any language") + " → English")
         }
-        .menuStyle(.borderlessButton).fixedSize()
+        #if os(macOS)
+        .menuStyle(.borderlessButton)
+        #endif
+        .fixedSize()
         .disabled(disabled)
         .help("The languages spoken here. Anything else is taken as misheard.")
     }
 }
 
+#if os(macOS)
 struct DevicePicker: View {
     let title: String
     let input: Bool
@@ -209,6 +239,7 @@ struct DevicePicker: View {
         .controlSize(.small).fixedSize()
     }
 }
+#endif
 
 struct LevelMeter: View {
     let level: Float

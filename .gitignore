@@ -11,3 +11,7 @@ recordings/
 .swiftpm/
 *.xcresult
 Interpreter.app/
+apple/iOS/Resources/
+apple/iOS/Interpreter.xcodeproj/
+apple/iOS/.build/
+apple/iOS/App/Info.plist
