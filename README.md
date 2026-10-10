@@ -83,7 +83,7 @@ competing for the GPU.
 MLX runs on one thread and translation goes first. A committed piece waiting
 is lag the listener hears; a delayed ASR pass only delays the next commit,
 whose translation would queue behind this one anyway. Median lag, real time,
-M1:
+M1 (one run each; repeated runs vary by about ±0.3 s):
 
 | sample | time-sliced | translation first |
 |---|---|---|
