@@ -1,2 +1,1 @@
-def hello() -> str:
-    return "Hello from translate-core!"
+"""Live speech interpretation into English, locally."""
