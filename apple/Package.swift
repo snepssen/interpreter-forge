@@ -24,10 +24,12 @@ let package = Package(
         // Headers and the vendored static espeak-ng, copied from voice-forge.
         .target(name: "CEspeakNG",
                 linkerSettings: [.unsafeFlags(["-L\(espeakLib)", "-lespeak-ng", "-lucd"])]),
+        // NSException to NSError, for AVAudioEngine, which raises instead of throwing.
+        .target(name: "ObjCExceptions"),
         // The models and the live loop: Parakeet and VAD (FluidAudio, ONNX),
         // the translation model (MLX), the voice (Piper on ONNX).
         .target(name: "InterpreterEngine", dependencies: [
-            "InterpreterCore", "CEspeakNG",
+            "InterpreterCore", "CEspeakNG", "ObjCExceptions",
             .product(name: "FluidAudio", package: "FluidAudio"),
             .product(name: "MLXLLM", package: "mlx-swift-lm"),
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),

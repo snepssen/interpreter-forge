@@ -87,12 +87,18 @@ struct ContentView: View {
     private var listening: some View {
         HStack(spacing: 12) {
             LevelMeter(level: session.level).frame(width: 70, height: 6)
-            Text(session.hearing.isEmpty ? (session.isLive ? "Listening" : " ") : session.hearing)
-                .lineLimit(1).truncationMode(.head)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let notice = session.notice {
-                Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(notice)
+            if let notice = session.notice, !session.isLive {
+                Label(notice, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(session.hearing.isEmpty ? (session.isLive ? "Listening" : " ") : session.hearing)
+                    .lineLimit(1).truncationMode(.head)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let notice = session.notice {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(notice)
+                }
             }
             if !session.lines.isEmpty && !session.isLive {
                 Button("Clear") { session.clear() }.buttonStyle(.borderless)

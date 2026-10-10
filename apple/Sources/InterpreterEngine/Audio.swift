@@ -1,5 +1,6 @@
 @preconcurrency import AVFoundation
 import Foundation
+import ObjCExceptions
 #if os(macOS)
 import CoreAudio
 #endif
@@ -41,6 +42,19 @@ public final class SampleBuffer: @unchecked Sendable {
     }
 
     public func everything() -> [Float] { lock.withLock { samples } }
+}
+
+public enum AudioFailure: LocalizedError {
+    case noInput
+    public var errorDescription: String? {
+        "The microphone isn't delivering audio. Allow Interpreter in System Settings → Privacy & Security → Microphone."
+    }
+}
+
+/// AVAudioEngine raises NSException for misuse; this makes it a Swift error.
+func objc(_ body: () -> Void) throws {
+    var error: NSError?
+    if !TCTry(body, &error), let error { throw error }
 }
 
 /// Where the speech comes from.
@@ -105,11 +119,16 @@ public final class Microphone: AudioSource, @unchecked Sendable {
     public func start() throws {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
+        // Before microphone access is granted the input has no format at all, and
+        // a tap on it raises an exception rather than failing.
+        guard format.sampleRate > 0, format.channelCount > 0 else { throw AudioFailure.noInput }
         converter = AVAudioConverter(from: format, to: target)
-        input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] pcm, _ in
-            self?.receive(pcm)
+        try objc {
+            input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] pcm, _ in
+                self?.receive(pcm)
+            }
+            engine.prepare()
         }
-        engine.prepare()
         try engine.start()
     }
 
@@ -160,16 +179,18 @@ public final class Speaker: @unchecked Sendable {
         self.clock = clock
         self.audible = audible
         guard audible else { return }
-        engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
         #if os(macOS)
         if let device, let id = AudioDevices.find(device, input: false) {
             try AudioDevices.use(id, on: engine.outputNode)
         }
         #endif
-        engine.prepare()
+        try objc {
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: format)
+            engine.prepare()
+        }
         try engine.start()
-        player.play()
+        try objc { player.play() }
     }
 
     /// Seconds of English still waiting to be heard.

@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import InterpreterCore
 import Observation
@@ -88,13 +89,17 @@ public final class LiveSession {
             if Resources.vad == nil { phase = .failed("No voice activity model (models/silero_vad.onnx).") }
             return
         }
+        guard await Self.microphoneAllowed() else {
+            notice = "Interpreter needs the microphone: allow it in System Settings → Privacy & Security → Microphone, then press Live."
+            return
+        }
         let pipeline = Pipeline(recognizer: recognizer, linguist: linguist, voice: voice, vad: vad)
         do {
             try pipeline.start(microphone: microphone, speaker: speaker) { event in
                 Task { @MainActor in self.apply(event) }
             }
         } catch {
-            phase = .failed("Couldn't open the audio: \(error.localizedDescription)")
+            notice = "Couldn't open the audio: \(error.localizedDescription)"
             return
         }
         self.pipeline = pipeline
@@ -105,6 +110,16 @@ public final class LiveSession {
                 self?.level = pipeline.level
                 try? await Task.sleep(for: .milliseconds(80))
             }
+        }
+    }
+
+    /// Ask before the audio engine touches the input: until access is granted the
+    /// input has no format, and AVAudioEngine raises on it.
+    static func microphoneAllowed() async -> Bool {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized: true
+        case .notDetermined: await AVCaptureDevice.requestAccess(for: .audio)
+        default: false
         }
     }
 
