@@ -14,6 +14,8 @@ import re
 import mlx.core as mx
 from mlx_lm.models.cache import make_prompt_cache, trim_prompt_cache
 
+from .translate import shared_prefix
+
 SYSTEM = """You decide when a simultaneous interpreter may start translating.
 You see the beginning of what someone is saying in a European language, from speech recognition.
 Answer yes if it is a complete thought that can be translated correctly now, even if more may follow.
@@ -43,7 +45,7 @@ class CompletenessJudge:
         messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": f'"{text}"'}]
         prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True)
 
-        keep = min(_shared(self._cached, prompt), len(prompt) - 1)
+        keep = min(shared_prefix(self._cached, prompt), len(prompt) - 1)
         trim_prompt_cache(self._cache, len(self._cached) - keep)
         hidden = self.model.model(mx.array([prompt[keep:]]), self._cache)[:, -1:]
         self._cached = prompt
@@ -56,15 +58,6 @@ class CompletenessJudge:
         if getattr(self.model.args, "tie_word_embeddings", False):
             return self.model.model.embed_tokens.as_linear(hidden)
         return self.model.lm_head(hidden)
-
-
-def _shared(a: list[int], b: list[int]) -> int:
-    n = 0
-    for x, y in zip(a, b):
-        if x != y:
-            break
-        n += 1
-    return n
 
 
 def _token_ids(tokenizer, words: tuple[str, ...]) -> mx.array:

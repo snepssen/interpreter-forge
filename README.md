@@ -53,6 +53,7 @@ there is speech on its far side.
 ## Running it
 
     uv sync
+    scripts/fetch-models.sh                       # the translation model, into models/
     scripts/make-samples.sh                       # synthetic test speech, macOS `say`
     uv run translate-core samples/de_halting.wav  # → runs/de_halting/
     uv run pytest
