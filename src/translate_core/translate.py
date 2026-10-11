@@ -69,18 +69,20 @@ class LLMTranslator:
         messages.append({"role": "user", "content": _piece(text, brief)})
         prompt = self.tokenizer.apply_chat_template(messages, add_generation_prompt=True)
 
-        keep = min(shared_prefix(self._cached, prompt), len(prompt) - 1)
-        trim_prompt_cache(self._cache, len(self._cached) - keep)
+        fresh = self._prepare(prompt)
         out, produced = "", []
-        for r in stream_generate(self.model, self.tokenizer, prompt[keep:],
-                                 max_tokens=self.max_tokens, prompt_cache=self._cache):
-            out += r.text
-            if r.finish_reason is None:
-                produced.append(r.token)
-                yield
+        try:
+            for r in stream_generate(self.model, self.tokenizer, fresh,
+                                     max_tokens=self.max_tokens, prompt_cache=self._cache):
+                out += r.text
+                if r.finish_reason is None:
+                    produced.append(r.token)
+                    yield
+        except BaseException:
+            self._reset_cache()
+            raise
         # The cache may run a token past what was yielded; hold it to what we know.
-        self._cached = prompt + produced
-        trim_prompt_cache(self._cache, self._cache[0].offset - len(self._cached))
+        self._settle(prompt + produced)
 
         out = out.strip().strip('"').strip()
         self.history.append((text, out))
@@ -89,9 +91,36 @@ class LLMTranslator:
     def remember(self, text: str) -> None:
         """Keep a piece that needed no translation as context for the ones that do."""
         self.history.append((text, text))
+        if len(self.history) > 2 * self.context:
+            del self.history[:len(self.history) - self.context]
 
     def reset(self) -> None:
         self.history.clear()
+        self._reset_cache()
+
+    def _reset_cache(self) -> None:
+        self._cache = make_prompt_cache(self.model)
+        self._cached = []
+
+    def _prepare(self, prompt: list[int]) -> list[int]:
+        if not prompt:
+            raise ValueError('The translation prompt is empty')
+        keep = min(shared_prefix(self._cached, prompt), len(prompt) - 1)
+        offset = min((c.offset for c in self._cache), default=0)
+        drop = max(0, offset - keep)
+        if (trim_prompt_cache(self._cache, drop) != drop
+                or any(c.offset != keep for c in self._cache)):
+            # A rotating cache may refuse to rewind once its window fills.
+            self._reset_cache()
+            keep = 0
+        return prompt[keep:]
+
+    def _settle(self, tokens: list[int]) -> None:
+        offset = min((c.offset for c in self._cache), default=0)
+        self._cached = tokens[:offset]
+        extra = max(0, offset - len(self._cached))
+        if extra and trim_prompt_cache(self._cache, extra) != extra:
+            self._reset_cache()
 
 
 def _piece(text: str, brief: bool = False) -> str:

@@ -60,8 +60,30 @@ its thinking switched off: left on, it reasons for seconds over every line.
 The iPhone app (`apple/iOS/build-ios.sh`, iOS 17+) is the same engine and
 views. On an iPhone 17 (8 GB) the 4B translation model fits with the
 increased-memory entitlement, at 3.4–4.0 s lag in a first real test. The
-phone's own mic listens, AirPods play the English in full quality, and it
-keeps going with the screen locked.
+phone's own mic listens and AirPods play the English in full quality.
+Translation currently requires keeping the phone app active. Locking the
+screen, switching apps or another interruption pauses capture and playback;
+return to Interpreter and press Live to restart. In-flight model work is
+cancelled and drained before another session can start. The app does not
+claim background GPU support. Ready without another recognition download and
+lock/unlock followed by restarting Live were checked on the updated iPhone.
+
+`build-ios.sh` removes the previous generated app before building, then checks
+that a new bundle contains the expected executable and bundle identifier and
+passes signature verification before installing. `--no-install` runs those
+same checks without touching the phone. Dependency and compilation caches stay
+in place.
+
+Speech recognition models use FluidAudio's Application Support directory.
+The installer has no uninstall step. An in-place update was checked on the
+phone: all 35 recognition-file entries retained their paths, sizes and
+modification dates, and the user confirmed Ready without another download.
+Download progress is shown only during
+model fetching; loading cached models is labelled “Loading speech recognition”.
+The storage display reads the same directory as the recognizer. To check
+retention on a phone, note the recognition storage size, install over the
+existing app without deleting it, and compare the size before starting a
+session. Then test a session offline to confirm the models are reusable.
 
 | | Python (MLX) | Swift app |
 |---|---|---|
@@ -250,6 +272,13 @@ toward the next hour, which fixes the Romance "minus" forms and quarters but
 not German and Dutch half hours, so those are rewritten to digits before the
 model sees them (`um halb elf` → `um 10:30`, also `dreiviertel acht`, `Viertel
 vor`, `kwart voor`). Held-out times in seven languages: 14 of 14.
+
+Recording checks also exposed limits beyond that test set: recognition can
+write Italian `sette meno cinque` as the ambiguous `7-5`, and a hesitation
+misheard as `M.` can become an invented `[Name]` in translation. The Swift apps
+show a clarification message for these detected cases and do not speak them.
+They preserve the source transcript; the checks neither recover a missing
+meaning nor establish general translation accuracy.
 
 ## Not yet
 

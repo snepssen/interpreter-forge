@@ -32,7 +32,6 @@ targets:
       properties:
         CFBundleDisplayName: Interpreter
         NSMicrophoneUsageDescription: Interpreter listens to the conversation around you to translate it into English, on this iPhone.
-        UIBackgroundModes: [audio]
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false

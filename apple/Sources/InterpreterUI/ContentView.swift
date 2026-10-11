@@ -87,7 +87,7 @@ public struct ContentView: View {
         ScrollViewReader { scroll in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    if visible.isEmpty { placeholder }
+                    if showStatus { placeholder }
                     ForEach(visible) { line in
                         LineView(line: line).id(line.id)
                     }
@@ -102,6 +102,13 @@ public struct ContentView: View {
 
     private var visible: [LiveSession.Line] {
         session.lines.filter { showEnglish || ($0.silence != .english && $0.silence != .echo) }
+    }
+
+    private var showStatus: Bool {
+        switch session.phase {
+        case .ready, .live: visible.isEmpty
+        default: true
+        }
     }
 
     @ViewBuilder private var placeholder: some View {
@@ -175,7 +182,7 @@ struct LiveButton: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .disabled(!(session.phase == .ready || session.isLive))
+        .disabled(session.isBusy || !(session.phase == .ready || session.isLive))
         .keyboardShortcut(.space, modifiers: [])
         .help("Start or stop interpreting (Space)")
     }
@@ -192,6 +199,10 @@ struct LineView: View {
             case .language?:
                 Text(line.source).foregroundStyle(.tertiary).strikethrough()
                     .help("Not in any language expected here: taken as misheard, not spoken")
+            case .unclear?:
+                Text(line.source).foregroundStyle(.secondary).textSelection(.enabled)
+                Label(line.translation ?? "Please repeat this piece.", systemImage: "questionmark.circle")
+                    .font(.callout).foregroundStyle(.orange)
             case nil:
                 if let translation = line.translation {
                     Text(translation).font(.title3).textSelection(.enabled)

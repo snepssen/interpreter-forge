@@ -8,10 +8,21 @@ struct InterpreterApp: App {
 
     var body: some Scene {
         WindowGroup("Interpreter") {
-            ContentView(session: session)
-                .frame(minWidth: 480, minHeight: 560)
-                .task { await session.prepare() }
+            InterpreterWindow(session: session)
         }
         .windowResizability(.contentMinSize)
+    }
+}
+
+private struct InterpreterWindow: View {
+    let session: LiveSession
+    @State private var id = UUID()
+
+    var body: some View {
+        ContentView(session: session)
+            .frame(minWidth: 480, minHeight: 560)
+            .onAppear { session.windowOpened(id) }
+            .onDisappear { session.windowClosed(id) }
+            .task { await session.prepare() }
     }
 }

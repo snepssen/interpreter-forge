@@ -10,6 +10,7 @@ recordings/
 .build/
 .swiftpm/
 *.xcresult
+*.profraw
 Interpreter.app/
 apple/iOS/Resources/
 apple/iOS/Interpreter.xcodeproj/

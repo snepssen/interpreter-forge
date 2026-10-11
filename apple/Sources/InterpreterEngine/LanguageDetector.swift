@@ -1,4 +1,5 @@
 import Foundation
+import InterpreterCore
 import NaturalLanguage
 
 /// Which language a piece is in, from Apple's on-device recogniser: no model
@@ -13,11 +14,9 @@ public struct LanguageDetector: Sendable {
     }
 
     /// Europe's languages and its neighbours': what the people this is for speak.
-    static let candidates: [NLLanguage] = [
-        .english, .polish, .hungarian, .dutch, .romanian, .norwegian, .swedish, .danish, .german, .italian,
-        .french, .spanish, .portuguese, .czech, .slovak, .croatian, .finnish, .greek, .russian, .ukrainian,
-        .bulgarian, .catalan, .turkish,
-    ]
+    static let candidates: [NLLanguage] = Set(Languages.names.keys)
+        .union(["no", "ca", "tr"]).sorted()
+        .map { NLLanguage(rawValue: $0 == "no" ? "nb" : $0) }
 
     public init() {}
 

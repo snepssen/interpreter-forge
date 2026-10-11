@@ -18,6 +18,10 @@ let package = Package(
         .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.20.0"),
     ],
     targets: [
+        .testTarget(name: "InterpreterEngineTests", dependencies: [
+            "InterpreterEngine", "InterpreterCore",
+            .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+        ]),
         // Everything that can be decided without a model: the segmenter, clock
         // times, language evidence, echoes, catch-up. Held to the Python
         // implementation by `tccheck`.

@@ -15,7 +15,11 @@ public actor Recognizer {
     public static func load(languages: [String], progress: (@Sendable (Double) -> Void)? = nil) async throws -> Recognizer {
         var handler: ProgressHandler?
         if let progress { handler = { progress($0.fractionCompleted) } }
-        let models = try await AsrModels.downloadAndLoad(version: .v3, progressHandler: handler)
+        // Only download progress should be presented as downloading. FluidAudio's
+        // load callback also reports fractions (including 50%) for cached models.
+        let directory = try await AsrModels.download(version: .v3, progressHandler: handler)
+        progress?(1)
+        let models = try await AsrModels.load(from: directory, version: .v3)
         let manager = AsrManager(config: .default)
         try await manager.loadModels(models)
         return Recognizer(manager: manager, languages: languages)
@@ -38,6 +42,7 @@ public actor Recognizer {
 
     /// Words in `samples` (16 kHz mono), timed in stream seconds from `offset`.
     public func transcribe(_ samples: [Float], offset: Double) async throws -> [Word] {
+        try Task.checkCancellation()
         guard samples.count >= 16_000 * 3 / 10 else { return [] }  // FluidAudio's minimum
         var state = TdtDecoderState.make()
         let result = try await manager.transcribe(samples, decoderState: &state, language: hint)

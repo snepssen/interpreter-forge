@@ -57,9 +57,10 @@ try pipeline.start(source: Recording(samples), speaker: nil, audible: false) { e
         case .committed(let s):
             tally.texts[s.index] = s.text
             print(String(format: "[%6.2f–%6.2f] %-8@ │ %@", s.start, s.end, s.reason, s.text))
-        case .silent(let index, let why, _):
+        case .silent(let index, let why, let detail):
             tally.silent[why, default: 0] += 1
             print("  #\(index) \(why.rawValue), not spoken")
+            if why == .unclear, let detail { print("    \(detail)") }
         case .interpreted(let indices, let translation, let start, let lags, let brief, let pace):
             tally.lags += lags
             let marks = (brief ? " [brief]" : "") + (pace > 1 ? String(format: " [x%.2f]", pace) : "")
@@ -73,6 +74,10 @@ try pipeline.start(source: Recording(samples), speaker: nil, audible: false) { e
     }
 }
 await pipeline.finish()
+if let failure = pipeline.failure {
+    info("run failed: \(failure)")
+    exit(1)
+}
 
 let lags = tally.lags.sorted()
 if !lags.isEmpty {

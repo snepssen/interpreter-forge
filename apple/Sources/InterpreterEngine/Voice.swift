@@ -76,8 +76,7 @@ public final class Voice: @unchecked Sendable {
 
     private func infer(_ ids: [Int], lengthScale: Double) throws -> [Float] {
         func tensor<T>(_ values: [T], _ type: ORTTensorElementDataType, _ shape: [Int]) throws -> ORTValue {
-            var values = values
-            let data = NSMutableData(bytes: &values, length: values.count * MemoryLayout<T>.stride)
+            let data = values.withUnsafeBytes { NSMutableData(bytes: $0.baseAddress, length: $0.count) }
             return try ORTValue(tensorData: data, elementType: type, shape: shape.map { NSNumber(value: $0) })
         }
         var inputs = [

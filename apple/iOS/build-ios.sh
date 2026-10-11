@@ -22,10 +22,27 @@ rsync -a --delete "$VOICEFORGE/espeak-ng-data/" Resources/espeak-ng-data/
 cp "$REPO/models/silero_vad.onnx" Resources/
 
 xcodegen generate --quiet
-xcodebuild -project Interpreter.xcodeproj -scheme Interpreter -configuration Release \
-  -destination 'generic/platform=iOS' -derivedDataPath "$IOS/.build" \
-  -allowProvisioningUpdates -skipMacroValidation -skipPackagePluginValidation -quiet build
+# Remove only the generated app, retaining dependency/build caches. A successful
+# no-op must never leave an old bundle available for installation.
 APP="$IOS/.build/Build/Products/Release-iphoneos/Interpreter.app"
+rm -rf "$APP"
+build_app() {
+  xcodebuild -project Interpreter.xcodeproj -scheme Interpreter -configuration Release \
+    -destination 'generic/platform=iOS' -derivedDataPath "$IOS/.build" \
+    -allowProvisioningUpdates -skipMacroValidation -skipPackagePluginValidation "$@"
+}
+build_app build
+if [ ! -d "$APP" ]; then
+  echo "Xcode produced no app; clearing stale build products and rebuilding once" >&2
+  build_app clean build
+fi
+[ -d "$APP" ] || { echo "build produced no app; refusing to install" >&2; exit 1; }
+EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
+[ "$BUNDLE_ID" = "com.snepssen.interpreter" ] && [ -s "$APP/$EXECUTABLE" ] || {
+  echo "build produced an invalid app; refusing to install" >&2; exit 1;
+}
+codesign --verify --deep --strict "$APP"
 echo "built: $APP ($(du -sh "$APP" | cut -f1))"
 
 [ "${1:-}" = "--no-install" ] && exit 0

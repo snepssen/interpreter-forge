@@ -1,3 +1,4 @@
+import FluidAudio
 import Foundation
 
 /// Translation models on this device: fetched from their pinned Hugging Face
@@ -14,7 +15,11 @@ public enum ModelStore {
 
     /// Where `model` is, if it is all here.
     public static func location(of model: TranslationModel) -> URL? {
-        [directory.appending(path: model.id), Resources.checkout.appending(path: "models/\(model.id)")]
+        location(of: model, in: [directory.appending(path: model.id), Resources.checkout.appending(path: "models/\(model.id)")])
+    }
+
+    static func location(of model: TranslationModel, in folders: [URL]) -> URL? {
+        folders
             .first { folder in model.files.allSatisfy { fileSize(folder.appending(path: $0.name)) == $0.size } }
     }
 
@@ -31,6 +36,10 @@ public enum ModelStore {
         if let found = location(of: model) { return found }
         let folder = directory.appending(path: model.id)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var excluded = folder
+        try excluded.setResourceValues(values)
         var done: Int64 = 0
         for file in model.files {
             let target = folder.appending(path: file.name)
@@ -43,6 +52,7 @@ public enum ModelStore {
             let downloaded = try await Download.fetch(url) { written in
                 progress(Double(base + written) / Double(model.download))
             }
+            defer { try? FileManager.default.removeItem(at: downloaded) }
             guard fileSize(downloaded) == file.size else {
                 throw Problem("\(file.name) arrived as \(fileSize(downloaded) ?? 0) bytes, not \(file.size). Try again on a steady connection.")
             }
@@ -50,10 +60,7 @@ public enum ModelStore {
             try FileManager.default.moveItem(at: downloaded, to: target)
             done += file.size
         }
-        var values = URLResourceValues()
-        values.isExcludedFromBackup = true
-        var excluded = folder
-        try? excluded.setResourceValues(values)
+        progress(1)
         return folder
     }
 
@@ -70,8 +77,7 @@ public enum ModelStore {
 
     /// Parakeet's folder in FluidAudio's cache, if it has been downloaded.
     public static func recognitionSize() -> Int64? {
-        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: "FluidAudio/Models/parakeet-tdt-0.6b-v3")
+        let folder = AsrModels.defaultCacheDirectory(for: .v3)
         guard let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.fileSizeKey]) else { return nil }
         let total = files.compactMap { ($0 as? URL).flatMap { try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize } }
             .reduce(0, +)
@@ -106,6 +112,11 @@ final class Download: NSObject, URLSessionDownloadDelegate, @unchecked Sendable 
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        guard let response = downloadTask.response as? HTTPURLResponse, (200..<300).contains(response.statusCode) else {
+            continuation?.resume(throwing: Problem("The model server did not return a successful HTTP response."))
+            continuation = nil
+            return
+        }
         // The temporary file is deleted when this returns; keep it.
         let kept = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         do {

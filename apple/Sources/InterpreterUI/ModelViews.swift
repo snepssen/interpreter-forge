@@ -85,10 +85,10 @@ struct ModelRow: View {
                     Text("\(Int(fraction * 100))%").font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 } else if downloaded {
                     if !inUse {
-                        Button("Use") { Task { await session.use(model) } }.disabled(session.isLive)
+                        Button("Use") { Task { await session.use(model) } }.disabled(session.isLive || session.isBusy)
                     }
                     if ModelStore.isDeletable(model) {
-                        Button("Delete", role: .destructive) { confirmingDelete = true }.disabled(session.isLive)
+                        Button("Delete", role: .destructive) { confirmingDelete = true }.disabled(session.isLive || session.isBusy)
                     }
                 } else {
                     Button("Download") { Task { await session.download(model) } }.disabled(!model.fits)

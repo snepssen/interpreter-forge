@@ -50,14 +50,16 @@ public final class EspeakPhonemizer {
     private static let clauseColon = 30 | intonationFullStop | typeClause
     private static let clauseSemicolon = 30 | intonationComma | typeClause
 
-    // espeak_Initialize is process-global state, not per-instance -- it may
-    // only run once no matter how many phonemizers get created. `init` is
-    // called once, at engine construction, never from a hot or concurrent
-    // path -- `nonisolated(unsafe)` is Swift's sanctioned escape hatch for
-    // exactly this "safe by construction, not by the compiler's proof" case.
+    // Initialization, voice selection and phonemization share process-global
+    // C state. Per-Voice locks alone cannot protect two overlapping sessions.
+    private static let lock = NSLock()
     private nonisolated(unsafe) static var initialized = false
+    private let voiceName: String
 
     public init(dataDirectory: URL, voice: String) throws {
+        voiceName = voice
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
         if !Self.initialized {
             let result = dataDirectory.path.withCString { path in
                 espeak_Initialize(AUDIO_OUTPUT_SYNCHRONOUS, 0, path, 0)
@@ -81,6 +83,11 @@ public final class EspeakPhonemizer {
     /// Text to phoneme clauses -- each roughly a sentence or sub-clause,
     /// carrying its own terminator punctuation and whether it ends a sentence.
     public func clauses(for text: String) throws -> [Clause] {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        guard voiceName.withCString({ espeak_SetVoiceByName($0) }) == EE_OK else {
+            throw PhonemizerError.voiceNotFound(voiceName)
+        }
         guard let buffer = strdup(Self.spacedEmDashes(Self.respelled(text)))
         else { throw PhonemizerError.allocationFailed }
         defer { free(buffer) }

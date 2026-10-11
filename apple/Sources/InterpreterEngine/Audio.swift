@@ -11,7 +11,8 @@ public final class SampleBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var samples: [Float] = []
     private var base = 0  // stream index of samples[0]
-    public private(set) var level: Float = 0  // RMS of the latest block
+    private var rms: Float = 0
+    public var level: Float { lock.withLock { rms } }
 
     public var count: Int { lock.withLock { base + samples.count } }
 
@@ -19,7 +20,7 @@ public final class SampleBuffer: @unchecked Sendable {
         let rms = block.isEmpty ? 0 : (block.reduce(0) { $0 + $1 * $1 } / Float(block.count)).squareRoot()
         lock.withLock {
             samples += block
-            level = rms
+            self.rms = rms
         }
     }
 
@@ -83,10 +84,10 @@ public final class Recording: AudioSource, @unchecked Sendable {
         let samples = samples
         let buffer = buffer
         task = Task.detached { [weak self] in
-            let started = Date()
+            let started = ProcessInfo.processInfo.systemUptime
             var at = 0
             while at < samples.count, !Task.isCancelled {
-                let due = Int(Date().timeIntervalSince(started) * 16_000)
+                let due = Int((ProcessInfo.processInfo.systemUptime - started) * 16_000)
                 if due > at {
                     let end = min(due, samples.count)
                     buffer.append(Array(samples[at..<end]))
@@ -104,11 +105,14 @@ public final class Recording: AudioSource, @unchecked Sendable {
 /// The microphone, converted to 16 kHz mono as it arrives.
 public final class Microphone: AudioSource, @unchecked Sendable {
     public let buffer = SampleBuffer()
-    private let engine = AVAudioEngine()
+    let audioEngine: AVAudioEngine
+    private var engine: AVAudioEngine { audioEngine }
     private var converter: AVAudioConverter?
+    private var tapInstalled = false
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
 
-    public init(device: String? = nil) throws {
+    public init(device: String? = nil, engine sharedEngine: AVAudioEngine? = nil) throws {
+        audioEngine = sharedEngine ?? AVAudioEngine()
         #if os(macOS)
         if let device, let id = AudioDevices.find(device, input: true) {
             try AudioDevices.use(id, on: engine.inputNode)
@@ -123,17 +127,27 @@ public final class Microphone: AudioSource, @unchecked Sendable {
         // a tap on it raises an exception rather than failing.
         guard format.sampleRate > 0, format.channelCount > 0 else { throw AudioFailure.noInput }
         converter = AVAudioConverter(from: format, to: target)
-        try objc {
-            input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] pcm, _ in
-                self?.receive(pcm)
+        guard converter != nil else { throw AudioFailure.noInput }
+        do {
+            try objc {
+                input.installTap(onBus: 0, bufferSize: 4096, format: format) { [weak self] pcm, _ in
+                    self?.receive(pcm)
+                }
+                tapInstalled = true
+                engine.prepare()
             }
-            engine.prepare()
+            try engine.start()
+        } catch {
+            stop()
+            throw error
         }
-        try engine.start()
     }
 
     public func stop() {
-        engine.inputNode.removeTap(onBus: 0)
+        if tapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
         engine.stop()
     }
 
@@ -162,19 +176,23 @@ public final class Microphone: AudioSource, @unchecked Sendable {
 /// Plays clips back to back and knows how far behind it is. With `audible`
 /// false it only keeps the schedule, for a listen-back without speakers.
 public final class Speaker: @unchecked Sendable {
-    private let engine = AVAudioEngine()
+    let audioEngine: AVAudioEngine
+    private var engine: AVAudioEngine { audioEngine }
     private let player = AVAudioPlayerNode()
     private let audible: Bool
     /// Every clip and the session second it starts, for the listen-back.
-    public private(set) var placed: [(start: Double, samples: [Float])] = []
+    private var clips: [(start: Double, samples: [Float])] = []
+    public var placed: [(start: Double, samples: [Float])] { lock.withLock { clips } }
     public var sampleRate: Double { format.sampleRate }
     private let format: AVAudioFormat
     private let lock = NSLock()
     private var end = 0.0  // session clock time the last scheduled clip finishes
+    private var stopped = false
     private let clock: @Sendable () -> Double
 
-    public init(sampleRate: Double, device: String? = nil, audible: Bool = true,
+    public init(sampleRate: Double, device: String? = nil, audible: Bool = true, engine sharedEngine: AVAudioEngine? = nil,
                 clock: @escaping @Sendable () -> Double) throws {
+        audioEngine = sharedEngine ?? AVAudioEngine()
         format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate, channels: 1, interleaved: false)!
         self.clock = clock
         self.audible = audible
@@ -187,10 +205,23 @@ public final class Speaker: @unchecked Sendable {
         try objc {
             engine.attach(player)
             engine.connect(player, to: engine.mainMixerNode, format: format)
-            engine.prepare()
         }
-        try engine.start()
-        try objc { player.play() }
+        // With a shared phone engine, the microphone installs its tap before
+        // either I/O path starts. Two separate engines can reconfigure each
+        // other's audio session during startup.
+        if sharedEngine == nil { try start() }
+    }
+
+    func start() throws {
+        guard audible else { return }
+        do {
+            try objc { engine.prepare() }
+            if !engine.isRunning { try engine.start() }
+            try objc { player.play() }
+        } catch {
+            stop()
+            throw error
+        }
     }
 
     /// Seconds of English still waiting to be heard.
@@ -204,19 +235,27 @@ public final class Speaker: @unchecked Sendable {
         pcm.frameLength = AVAudioFrameCount(samples.count)
         samples.withUnsafeBufferPointer { pcm.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
         let start = lock.withLock {
+            guard !stopped else { return clock() }
             let start = max(clock(), end)
             end = start + Double(samples.count) / format.sampleRate
-            placed.append((start, samples))
+            // Only recording runs need a listen-back. Live playback must release
+            // old audio instead of retaining a whole conversation in memory.
+            if !audible { clips.append((start, samples)) }
+            if audible { player.scheduleBuffer(pcm) }
             return start
         }
-        if audible { player.scheduleBuffer(pcm) }
         return start
     }
 
     public func stop() {
-        guard audible else { return }
-        player.stop()
-        engine.stop()
+        lock.withLock {
+            stopped = true
+            end = clock()
+            if audible {
+                player.stop()
+                engine.stop()
+            }
+        }
     }
 }
 
@@ -226,6 +265,15 @@ public final class Speaker: @unchecked Sendable {
 /// call quality. Without headphones the interpreter speaks from the speaker,
 /// and since what it says is English, the gate keeps the echo quiet.
 public enum PhoneAudio {
+    static var routeState: AudioRouteState {
+        let session = AVAudioSession.sharedInstance()
+        return AudioRouteState(inputs: session.currentRoute.inputs.map(\.uid).sorted(),
+                               outputs: session.currentRoute.outputs.map(\.uid).sorted(),
+                               sampleRate: session.sampleRate,
+                               inputChannels: session.inputNumberOfChannels,
+                               outputChannels: session.outputNumberOfChannels)
+    }
+
     public static func activate() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .defaultToSpeaker])

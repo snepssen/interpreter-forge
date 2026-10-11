@@ -11,6 +11,7 @@ public enum Silence: String, Sendable {
     case english  // already English: kept as context
     case language  // in no language expected here: speech recognition went astray
     case echo  // a "translation" that only repeats its source: garbled English
+    case unclear  // a reproduced quality problem: shown for clarification, not spoken
 }
 
 /// The translation model, chosen in the model manager, and what it is asked:
@@ -62,6 +63,7 @@ public actor Linguist {
     }
 
     public func setLanguages(_ languages: [String]) {
+        if self.languages != languages { forget() }
         self.languages = languages
         system = Self.system(for: languages)
     }
@@ -81,6 +83,7 @@ public actor Linguist {
     /// English for `text`; `brief` asks a general model for the gist only, to
     /// catch up a backlog (TranslateGemma takes no instructions).
     public func translate(_ text: String, brief: Bool = false) throws -> String {
+        if let concern = TranslationQuality.concern(source: text) { throw UnclearTranslation(concern) }
         let text = Clock.normalise(text)
         let language = source(of: text)
         if history.count >= 2 * contextPieces { history.removeFirst(history.count - contextPieces) }
@@ -88,21 +91,31 @@ public actor Linguist {
             messages: messages(text, language, brief), tools: nil,
             additionalContext: ["enable_thinking": false])  // Gemma 4 otherwise reasons aloud: seconds a line
 
-        let fresh = translator.prepare(for: prompt)
+        try Task.checkCancellation()
+        let fresh = try translator.prepare(for: prompt)
         // English seldom needs three times the tokens of its source; a cap keeps
         // an aside from being spoken and the listener from falling behind.
         let cap = max(24, 3 * context.tokenizer.encode(text: text, addSpecialTokens: false).count)
         var iterator = try TokenIterator(input: LMInput(tokens: MLXArray(fresh)), model: context.model,
                                          cache: translator.kv, parameters: GenerateParameters(maxTokens: cap, temperature: 0))
         var produced: [Int] = []
-        while let token = iterator.next() {
-            if stops.contains(token) { break }
-            produced.append(token)
+        do {
+            while let token = iterator.next() {
+                try Task.checkCancellation()
+                if stops.contains(token) { break }
+                produced.append(token)
+            }
+        } catch {
+            try translator.reset()
+            throw error
         }
         // The cache may run a token past what was kept; hold it to what we know.
         translator.settle(prompt + produced)
 
         let out = Self.spoken(context.tokenizer.decode(tokenIds: produced, skipSpecialTokens: true))
+        if let concern = TranslationQuality.concern(source: text, translation: out) {
+            throw UnclearTranslation(concern)
+        }
         history.append((text, out, language))
         return out
     }
@@ -159,7 +172,10 @@ public actor Linguist {
     }
 
     /// Keep a piece that needed no translation as context for the ones that do.
-    public func remember(_ text: String) { history.append((text, text, "en")) }
+    public func remember(_ text: String) {
+        history.append((text, text, "en"))
+        if history.count > 2 * contextPieces { history.removeFirst(history.count - contextPieces) }
+    }
 
     public func forget() {
         history.removeAll()
@@ -178,6 +194,7 @@ public actor Linguist {
     /// Can this be translated correctly now? Only a general model is asked;
     /// without one, pieces are cut on pauses and punctuation alone.
     public func complete(_ text: String) throws -> Bool {
+        try Task.checkCancellation()
         guard model.judges else { return true }
         var text = text.trimmingCharacters(in: .whitespaces)
         while let last = text.last, ".?!…".contains(last) { text.removeLast() }
@@ -205,7 +222,7 @@ public actor Linguist {
         let prompt = try context.tokenizer.applyChatTemplate(messages: messages, tools: nil,
                                                              additionalContext: ["enable_thinking": false])
         var cache = try questions[instructions] ?? PromptCache(context.model)
-        let fresh = cache.prepare(for: prompt)
+        let fresh = try cache.prepare(for: prompt)
         let logits = context.model(LMInput.Text(tokens: MLXArray(fresh))[text: .newAxis], cache: cache.kv, state: nil)
             .logits[0, -1]
         cache.settle(prompt)
@@ -215,20 +232,44 @@ public actor Linguist {
     }
 }
 
+struct UnclearTranslation: LocalizedError {
+    let errorDescription: String?
+    init(_ message: String) { errorDescription = message }
+}
+
 /// An attention cache and the tokens it holds, reused across calls that share a prefix.
 struct PromptCache {
-    let kv: [KVCache]
+    private(set) var kv: [KVCache]
+    private let freshCache: () throws -> [KVCache]
     private(set) var tokens: [Int] = []
 
     init(_ model: any LanguageModel) throws {
-        kv = try model.newCache(parameters: nil)
+        try self.init { try model.newCache(parameters: nil) }
+    }
+
+    init(makeCache: @escaping () throws -> [KVCache]) throws {
+        freshCache = makeCache
+        kv = try makeCache()
+    }
+
+    mutating func reset() throws {
+        kv = try freshCache()
+        tokens = []
     }
 
     /// Trim back to what `prompt` shares with what is held; returns the part to read.
-    mutating func prepare(for prompt: [Int]) -> [Int] {
+    mutating func prepare(for prompt: [Int]) throws -> [Int] {
+        guard !prompt.isEmpty else { throw Problem("The model produced an empty prompt.") }
         var keep = zip(tokens, prompt).prefix { $0 == $1 }.count
-        keep = min(keep, prompt.count - 1)  // always read at least one token
-        _ = trimPromptCache(kv, numTokens: (kv.first?.offset ?? 0) - keep)
+        let offset = kv.first?.offset ?? 0
+        keep = min(keep, prompt.count - 1, offset)  // always read at least one token
+        let trim = offset - keep
+        if trim > 0 && (!canTrimPromptCache(kv) || trimPromptCache(kv, numTokens: trim) != trim) {
+            // Sliding attention can no longer rewind once its ring wraps. A
+            // failed trim must rebuild, not feed a suffix behind stale tokens.
+            try reset()
+            keep = 0
+        }
         return Array(prompt[keep...])
     }
 
@@ -236,6 +277,6 @@ struct PromptCache {
     mutating func settle(_ held: [Int]) {
         let extra = (kv.first?.offset ?? 0) - held.count
         if extra > 0 { _ = trimPromptCache(kv, numTokens: extra) }
-        tokens = held
+        tokens = Array(held.prefix(kv.first?.offset ?? 0))
     }
 }

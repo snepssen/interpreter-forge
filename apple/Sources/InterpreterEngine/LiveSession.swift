@@ -70,6 +70,19 @@ public final class LiveSession {
     private var voice: Voice?
     private var pipeline: Pipeline?
     private var meter: Task<Void, Never>?
+    private var eventsTask: Task<Void, Never>?
+    private var generation = UUID()
+    private var preparationID: UUID?
+    private var preparationTask: Task<Void, Never>?
+    private var shutdownTask: Task<Void, Never>?
+    private var shutdownID = UUID()
+    private var active = true
+    private var windows: Set<UUID> = []
+    private var starting = false
+    private var lineIDs: [Int: Int] = [:]
+    private var nextLineID = 0
+    public var isBusy: Bool { preparationID != nil || starting || shutdownTask != nil }
+    private var audioObservers: [NSObjectProtocol] = []
 
     public init() {}
 
@@ -77,12 +90,28 @@ public final class LiveSession {
 
     /// Load the three models; the first run downloads Parakeet (a few hundred MB).
     public func prepare() async {
+        let generation = self.generation
+        await shutdownTask?.value
+        guard generation == self.generation, active, !Task.isCancelled, preparationID == nil else { return }
         guard phase == .idle || phase == .choosingModel || phase.isFailure else { return }
         guard let model = translationModel, let modelURL = ModelStore.location(of: model) else {
             phase = .choosingModel
             return
         }
+        let preparation = UUID()
+        preparationID = preparation
+        let loading = Task { await load(model, at: modelURL, preparation: preparation) }
+        preparationTask = loading
+        await loading.value
+        if preparationID == preparation {
+            preparationID = nil
+            preparationTask = nil
+        }
+    }
+
+    private func load(_ model: TranslationModel, at modelURL: URL, preparation: UUID) async {
         do {
+            try Task.checkCancellation()
             guard let voiceURL = Resources.voice, let espeak = Resources.espeakData else {
                 throw Problem("No voice. Build with build.sh, or keep voice-forge beside translate-core.")
             }
@@ -90,51 +119,80 @@ public final class LiveSession {
                 phase = .loading("Loading speech recognition…")
                 recognizer = try await Recognizer.load(languages: languages) { fraction in
                     Task { @MainActor in
-                        if case .loading = self.phase, fraction < 1 {
-                            self.phase = .loading("Downloading speech recognition… \(Int(fraction * 100))%")
+                        if self.active, self.preparationID == preparation, self.recognizer == nil, case .loading = self.phase {
+                            self.phase = .loading(fraction < 1
+                                ? "Downloading speech recognition… \(Int(fraction * 100))%"
+                                : "Loading speech recognition…")
                         }
                     }
                 }
             }
+            try Task.checkCancellation()
             if linguist?.model != model {
                 linguist = nil  // one translation model in memory at a time
                 phase = .loading("Loading \(model.name)…")
                 linguist = try await Linguist(model: model, at: modelURL, languages: languages)
             }
+            try Task.checkCancellation()
             if voice == nil {
                 phase = .loading("Loading the voice…")
                 voice = try Voice(model: voiceURL, espeakData: espeak)
             }
+            try Task.checkCancellation()
             phase = .loading("Warming up…")
             try await linguist?.warmUp()
+            await recognizer?.setLanguages(languages)
+            await linguist?.setLanguages(languages)
+            try Task.checkCancellation()
+            storeChanges += 1
             phase = .ready
         } catch {
-            phase = .failed(error.localizedDescription)
+            phase = Task.isCancelled ? .idle : .failed(error.localizedDescription)
         }
     }
 
     public func start() async {
+        guard active, !starting, !isLive, preparationID == nil else { return }
+        let generation = self.generation
+        await shutdownTask?.value
+        guard generation == self.generation, active, !Task.isCancelled, !starting else { return }
+        starting = true
+        defer { starting = false }
         if phase != .ready { await prepare() }
+        guard generation == self.generation, active, !Task.isCancelled else { return }
         guard phase == .ready, let recognizer, let linguist, let voice, let vad = Resources.vad else {
             if Resources.vad == nil { phase = .failed("No voice activity model (models/silero_vad.onnx).") }
             return
         }
-        guard await Self.microphoneAllowed() else {
+        let allowed = await Self.microphoneAllowed()
+        guard generation == self.generation else { return }
+        guard allowed else {
             notice = "Interpreter needs the microphone: allow it in System Settings → Privacy & Security → Microphone, then press Live."
             return
         }
+        await linguist.forget()
+        guard generation == self.generation else { return }
         let pipeline = Pipeline(recognizer: recognizer, linguist: linguist, voice: voice, vad: vad)
+        let (events, continuation) = AsyncStream<PipelineEvent>.makeStream()
         do {
             try pipeline.start(microphone: microphone, speaker: speaker) { event in
-                Task { @MainActor in self.apply(event) }
+                continuation.yield(event)
             }
         } catch {
             notice = "Couldn't open the audio: \(error.localizedDescription)"
             return
         }
         self.pipeline = pipeline
+        beginTranscript()
+        eventsTask = Task { [weak self] in
+            for await event in events {
+                guard let self, self.generation == generation, !Task.isCancelled else { return }
+                self.apply(event)
+            }
+        }
         notice = nil
         phase = .live
+        observeAudioChanges()
         meter = Task { [weak self] in
             while !Task.isCancelled {
                 self?.level = pipeline.level
@@ -166,7 +224,9 @@ public final class LiveSession {
         }
         do {
             try await ModelStore.download(model) { fraction in
-                Task { @MainActor in self.downloads[model.id] = fraction }
+                Task { @MainActor in
+                    if self.downloads[model.id] != nil { self.downloads[model.id] = fraction }
+                }
             }
             if translationModel == nil || ModelStore.location(of: translationModel!) == nil { await use(model) }
         } catch {
@@ -176,6 +236,7 @@ public final class LiveSession {
 
     /// Switch the translation model; the old one leaves memory first.
     public func use(_ model: TranslationModel) async {
+        guard !isBusy else { return }
         guard model != translationModel || linguist == nil else { return }
         if isLive { stop() }
         translationModel = model
@@ -186,6 +247,7 @@ public final class LiveSession {
     }
 
     public func delete(_ model: TranslationModel) {
+        guard !isBusy, downloads[model.id] == nil else { return }
         if model == translationModel {
             if isLive { stop() }
             linguist = nil
@@ -198,32 +260,118 @@ public final class LiveSession {
     }
 
     public func stop() {
+        generation = UUID()
+        preparationTask?.cancel()
+        let previous = shutdownTask
+        let loading = preparationTask
+        let pipeline = self.pipeline
+        if previous != nil || loading != nil || pipeline != nil {
+            let shutdown = UUID()
+            shutdownID = shutdown
+            shutdownTask = Task { [weak self] in
+                await previous?.value
+                await loading?.value
+                await pipeline?.finish()
+                if self?.shutdownID == shutdown { self?.shutdownTask = nil }
+            }
+        }
+        eventsTask?.cancel()
+        eventsTask = nil
+        for observer in audioObservers { NotificationCenter.default.removeObserver(observer) }
+        audioObservers.removeAll()
         pipeline?.stop()
-        pipeline = nil
+        self.pipeline = nil
         meter?.cancel()
+        meter = nil
         level = 0
         hearing = ""
         if phase == .live { phase = .ready }
     }
 
+    /// GPU translation is foreground-only on iOS. Cancel before the app enters
+    /// the background, and drain old work before permitting another session.
+    public func setActive(_ active: Bool) {
+        self.active = active
+        if !active {
+            let interrupted = isLive || isBusy
+            stop()
+            if interrupted { notice = "Interpreter paused. Keep the app open and press Live to restart." }
+        }
+    }
+
+    /// All Mac windows share this session. Capture ends when its last view closes.
+    public func windowOpened(_ id: UUID) { windows.insert(id) }
+    public func windowClosed(_ id: UUID) {
+        guard windows.remove(id) != nil, windows.isEmpty else { return }
+        stop()
+    }
+
+    /// Observe our own engines. Startup/category notifications are harmless
+    /// while those engines are running and the active route remains unchanged.
+    private func observeAudioChanges() {
+        let generation = self.generation
+        for engine in pipeline?.audioEngines ?? [] {
+            audioObservers.append(NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) {
+                [weak self] _ in
+                Task { @MainActor in
+                    self?.audioChanged(.engineConfiguration(owned: true, isRunning: engine.isRunning),
+                                       generation: generation)
+                }
+            })
+        }
+        #if os(iOS)
+        let route = PhoneAudio.routeState
+        audioObservers.append(NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in
+                self?.audioChanged(.route(before: route, after: PhoneAudio.routeState), generation: generation)
+            }
+        })
+        audioObservers.append(NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            let began = (note.userInfo?[AVAudioSessionInterruptionTypeKey] as? NSNumber)?.uintValue
+                == AVAudioSession.InterruptionType.began.rawValue
+            Task { @MainActor in self?.audioChanged(.interruption(began: began), generation: generation) }
+        })
+        audioObservers.append(NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.audioChanged(.mediaReset, generation: generation) }
+        })
+        #endif
+    }
+
+    private func audioChanged(_ change: AudioChange, generation: UUID) {
+        guard isLive, self.generation == generation, change.requiresRestart else { return }
+        stop()
+        notice = "The audio route changed or was interrupted. Press Live to restart."
+    }
+
     public func clear() { lines.removeAll() }
 
-    private func apply(_ event: PipelineEvent) {
+    func beginTranscript() { lineIDs.removeAll() }
+
+    func apply(_ event: PipelineEvent) {
         switch event {
         case .hearing(let text):
             hearing = text
         case .committed(let segment):
-            lines.append(Line(id: segment.index, source: segment.text, reason: segment.reason, at: Date()))
+            lineIDs[segment.index] = nextLineID
+            lines.append(Line(id: nextLineID, source: segment.text, reason: segment.reason, at: Date()))
+            nextLineID += 1
         case .silent(let index, let why, let translation):
-            update(index) {
+            guard let id = lineIDs[index] else { return }
+            update(id) {
                 $0.silence = why
                 $0.translation = translation
             }
         case .interpreted(let indices, let translation, _, let lags, let brief, let pace):
+            let ids = indices.compactMap { lineIDs[$0] }
+            guard let first = ids.first else { return }
             // Merged pieces become one line, under the first.
-            let merged = lines.filter { indices.dropFirst().contains($0.id) }.map(\.source)
-            lines.removeAll { indices.dropFirst().contains($0.id) }
-            update(indices[0]) {
+            let merged = lines.filter { ids.dropFirst().contains($0.id) }.map(\.source)
+            lines.removeAll { ids.dropFirst().contains($0.id) }
+            update(first) {
                 $0.source = ([$0.source] + merged).joined(separator: " ")
                 $0.translation = translation
                 $0.lag = lags.max()
@@ -231,6 +379,8 @@ public final class LiveSession {
                 $0.pace = pace
             }
         case .failed(let message):
+            stop()
+            phase = .failed(message)
             notice = message
         }
     }

@@ -41,6 +41,7 @@ class Microphone:
     def __init__(self, device: int | str | None = None, keep: list[np.ndarray] | None = None):
         self.device = device
         self.keep = keep  # if given, every block heard is appended here too
+        self._stream = None
 
     def start(self, push: Callable[[np.ndarray], None]) -> None:
         import sounddevice as sd
@@ -59,8 +60,12 @@ class Microphone:
         return False
 
     def stop(self) -> None:
-        self._stream.stop()
-        self._stream.close()
+        stream, self._stream = self._stream, None
+        if stream is not None:
+            try:
+                stream.stop()
+            finally:
+                stream.close()
 
 
 class Recording:
@@ -69,13 +74,15 @@ class Recording:
     def __init__(self, samples: np.ndarray):
         self.samples = samples
         self._finished = threading.Event()
+        self._stop = threading.Event()
 
     def start(self, push: Callable[[np.ndarray], None]) -> None:
         def feed():
             t0 = time.perf_counter()
             for i in range(0, len(self.samples), BLOCK):
                 due = t0 + (i + BLOCK) / SAMPLE_RATE
-                time.sleep(max(0.0, due - time.perf_counter()))
+                if self._stop.wait(max(0.0, due - time.perf_counter())):
+                    break
                 push(self.samples[i:i + BLOCK])
             self._finished.set()
 
@@ -85,7 +92,7 @@ class Recording:
         return self._finished.is_set()
 
     def stop(self) -> None:
-        pass
+        self._stop.set()
 
 
 # -- playback -----------------------------------------------------------------
@@ -108,7 +115,11 @@ class Player:
             import sounddevice as sd
             self._stream = sd.OutputStream(samplerate=sample_rate, channels=1, dtype="float32",
                                            device=device, callback=self._fill)
-            self._stream.start()
+            try:
+                self._stream.start()
+            except Exception:
+                self._stream.close()
+                raise
 
     def backlog(self) -> float:
         with self._lock:
@@ -141,8 +152,10 @@ class Player:
 
     def close(self) -> None:
         if self._stream:
-            self._stream.stop()
-            self._stream.close()
+            try:
+                self._stream.stop()
+            finally:
+                self._stream.close()
 
 
 # -- the loop -----------------------------------------------------------------
@@ -211,10 +224,9 @@ class LiveInterpreter:
         inbox: queue.Queue[np.ndarray] = queue.Queue()
         t0 = time.perf_counter()
         clock = lambda: time.perf_counter() - t0  # noqa: E731
-        player = Player(self.tts.sample_rate, clock, device)
         speech: queue.Queue[Event | None] = queue.Queue()
-        speaker = threading.Thread(target=self._speak, args=(speech, player), daemon=True)
-        speaker.start()
+        failures: queue.Queue[Exception] = queue.Queue()
+        abandon = threading.Event()
 
         seg = Segmenter(self.config, self.judge)
         vad = SileroVAD()
@@ -226,9 +238,14 @@ class LiveInterpreter:
         job: _Job | None = None
         ended = False
 
-        source.start(inbox.put)
+        player = Player(self.tts.sample_rate, clock, device)
+        speaker = threading.Thread(target=self._speak, args=(speech, player, failures, abandon), daemon=True)
+        speaker.start()
         try:
+            source.start(inbox.put)
             while True:
+                if not failures.empty():
+                    raise failures.get_nowait()
                 source_done = source.done() or stop.is_set()
                 while True:  # take whatever audio has arrived
                     try:
@@ -295,15 +312,27 @@ class LiveInterpreter:
                     break
                 time.sleep(0.005)
         finally:
-            source.stop()
-            speech.put(None)
-            speaker.join()
-            player.close()
+            abandon.set()
+            try:
+                source.stop()
+            finally:
+                speech.put(None)
+                try:
+                    speaker.join()
+                finally:
+                    try:
+                        player.close()
+                    finally:
+                        if job is not None:
+                            job.steps.close()
+        if not failures.empty():
+            raise failures.get_nowait()
         return player
 
     def _pass(self, seg: Segmenter, vad: SileroVAD, buf: np.ndarray, base: int, now: float,
               flush: bool = False) -> list[Segment]:
         if vad.last_speech <= seg.mark and not flush:
+            seg.advance_idle(now)
             return []
         start = seg.window_start()
         i = max(0, int(start * SAMPLE_RATE) - base)
@@ -313,18 +342,31 @@ class LiveInterpreter:
         else:
             silence = vad.silence(now)
             committed = seg.step(now, words, silence)
-            if not words and silence >= seg.long_pause_threshold():
+            if not words and (silence >= seg.long_pause_threshold() or now - start >= seg.config.hard_segment):
                 seg.advance_idle(now)
         for s in committed:
             self.on_segment(s)
         return committed
 
-    def _speak(self, speech: "queue.Queue[Event | None]", player: Player) -> None:
-        while (event := speech.get()) is not None:
-            event.pace = self.backlog.pace(player.backlog()) if self.backlog else 1.0
-            clip = self.tts.speak(event.translation, pace=event.pace)
-            event.play_start = player.play(clip)
-            event.play_seconds = len(clip) / self.tts.sample_rate
-            self.events.append(event)
-            self.on_event(event)
-            speech.task_done()
+    def _speak(self, speech: "queue.Queue[Event | None]", player: Player,
+               failures: "queue.Queue[Exception]", abandon: threading.Event) -> None:
+        while True:
+            event = speech.get()
+            try:
+                if event is None:
+                    return
+                if abandon.is_set():
+                    continue
+                event.pace = self.backlog.pace(player.backlog()) if self.backlog else 1.0
+                clip = self.tts.speak(event.translation, pace=event.pace)
+                if abandon.is_set():
+                    continue
+                event.play_start = player.play(clip)
+                event.play_seconds = len(clip) / self.tts.sample_rate
+                self.events.append(event)
+                self.on_event(event)
+            except Exception as error:
+                failures.put(error)
+                abandon.set()
+            finally:
+                speech.task_done()

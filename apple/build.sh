@@ -22,8 +22,12 @@ swift run -q tccheck
 
 echo "building ($CONF)…"
 for scheme in Interpreter tcrun; do
-  xcodebuild -scheme "$scheme" -configuration "$CONF" -destination 'platform=macOS' \
+  rm -f "$PRODUCTS/$scheme"
+  xcodebuild -scheme "$scheme" -configuration "$CONF" -destination 'platform=macOS,arch=arm64' \
     -derivedDataPath "$DERIVED" -skipMacroValidation -skipPackagePluginValidation -quiet build
+  [ -s "$PRODUCTS/$scheme" ] && [ -x "$PRODUCTS/$scheme" ] || {
+    echo "error: build produced no $scheme executable; refusing to package" >&2; exit 1;
+  }
 done
 
 [ -s "$VOICEFORGE/$VOICE.onnx" ] || { echo "error: no voice at $VOICEFORGE (voice-forge beside translate-core?)" >&2; exit 1; }
@@ -71,4 +75,5 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --deep -s - "$APP" >/dev/null
+codesign --verify --deep --strict "$APP"
 echo "built: $APP  ($CONF, $bundles resource bundles, $(du -sh "$APP" | cut -f1))"
