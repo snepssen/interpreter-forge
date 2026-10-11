@@ -125,7 +125,7 @@ final class LifecycleTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        let model = TranslationModel(id: "test", name: "Test", summary: "", repo: "", revision: "",
+        let model = TranslationModel(id: "test", name: "Test", tagline: "", summary: "", repo: "", revision: "",
                                      style: .instructions, memoryGB: 0,
                                      files: [.init(name: "weights", size: 3), .init(name: "config", size: 2)])
         try Data([1, 2, 3]).write(to: folder.appending(path: "weights"))

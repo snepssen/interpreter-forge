@@ -60,6 +60,13 @@ public final class Pipeline: @unchecked Sendable {
     private let control = NSLock()
     private var stopped = false
     private var terminalFailure: String?
+    private var speaking = true
+    /// Off for captions only: translations are shown but not voiced, so
+    /// nothing queues in the headphones and nothing has to catch up.
+    public var speaks: Bool {
+        get { control.withLock { speaking } }
+        set { control.withLock { speaking = newValue } }
+    }
     public var failure: String? { control.withLock { terminalFailure } }
     private let inbox = Inbox()
     private let started = ProcessInfo.processInfo.systemUptime
@@ -295,9 +302,14 @@ public final class Pipeline: @unchecked Sendable {
                     continue
                 }
                 let pace = backlog?.pace(speaker.backlog) ?? 1
-                let samples = try voice.speak(translation, pace: pace)
-                try Task.checkCancellation()
-                let start = speaker.play(samples)
+                let start: Double
+                if speaks {
+                    let samples = try voice.speak(translation, pace: pace)
+                    try Task.checkCancellation()
+                    start = speaker.play(samples)
+                } else {
+                    start = clock()  // shown now: the lag is the wait for the text
+                }
                 let ends = piece.parts.isEmpty ? [piece.end] : piece.parts
                 events(.interpreted(indices: foreign.map(\.index), translation: translation, playStart: start,
                                     lags: ends.map { start - $0 }, brief: brief, pace: pace))

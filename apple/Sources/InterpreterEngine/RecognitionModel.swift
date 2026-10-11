@@ -14,8 +14,9 @@ public enum RecognitionModel: String, CaseIterable, Identifiable, Sendable {
     public var summary: String {
         self == .parakeetUltra
             ? "Fast recognition in 25 European languages. Updated Parakeet weights; runs on the Neural Engine."
-            : "Broader language coverage, including Dutch, Romanian and Hungarian. May add delay and use more memory during live translation."
+            : "100 languages, Norwegian among them, for speech outside Parakeet's 25. Much slower: about ten times Parakeet's time per window on an M1 Mac, so more delay."
     }
+    public var tagline: String { self == .parakeetUltra ? "25 languages · fast" : "100 languages · slower" }
     public var languageNames: [String: String] {
         if self == .parakeetUltra { return Languages.names }
         let locale = Locale(identifier: "en")

@@ -71,6 +71,28 @@ public final class LiveSession {
     /// Bumped when models come or go, so views listing them look again.
     public private(set) var storeChanges = 0
 
+    /// How loud the interpreter speaks, from 0 to 1. Remembered.
+    public var voiceVolume: Double = UserDefaults.standard.object(forKey: "voiceVolume") as? Double ?? 1 {
+        didSet {
+            UserDefaults.standard.set(voiceVolume, forKey: "voiceVolume")
+            applyVoice()
+        }
+    }
+
+    /// Translations on screen only, not spoken: for when there are no
+    /// headphones and the phone's speaker would talk over the room. Remembered.
+    public var captionsOnly: Bool = UserDefaults.standard.bool(forKey: "captionsOnly") {
+        didSet {
+            UserDefaults.standard.set(captionsOnly, forKey: "captionsOnly")
+            applyVoice()
+        }
+    }
+
+    private func applyVoice() {
+        pipeline?.speaks = !captionsOnly
+        pipeline?.speaker?.volume = captionsOnly ? 0 : Float(voiceVolume)
+    }
+
     /// Device names (or part of them); nil for the system's.
     public var microphone: String?
     public var speaker: String?
@@ -197,6 +219,7 @@ public final class LiveSession {
             return
         }
         self.pipeline = pipeline
+        applyVoice()
         beginTranscript()
         eventsTask = Task { [weak self] in
             for await event in events {

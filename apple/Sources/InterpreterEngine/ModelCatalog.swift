@@ -25,6 +25,8 @@ public struct TranslationModel: Identifiable, Hashable, Sendable {
 
     public let id: String  // folder name, and what is remembered as the choice
     public let name: String
+    /// A few words for a settings row.
+    public let tagline: String
     public let summary: String
     public let repo: String
     public let revision: String
@@ -51,7 +53,7 @@ public struct TranslationModel: Identifiable, Hashable, Sendable {
 public enum ModelCatalog {
     public static let translation: [TranslationModel] = [
         TranslationModel(
-            id: "translategemma-4b-it-4bit", name: "TranslateGemma 4B",
+            id: "translategemma-4b-it-4bit", name: "TranslateGemma 4B", tagline: "Best translations",
             summary: "Google's translation model: the most accurate, natural English, 55 languages. It can't judge when a thought is complete, so in quick conversation it speaks a second or two later than Qwen.",
             repo: "mlx-community/translategemma-4b-it-4bit", revision: "5788ec08c047f3f2e17808101b8d9566ac930d58",
             style: .translateGemma, memoryGB: 2.6,
@@ -61,7 +63,7 @@ public enum ModelCatalog {
                     .init(name: "tokenizer.json", size: 33_384_568), .init(name: "tokenizer.model", size: 4_689_074),
                     .init(name: "tokenizer_config.json", size: 1_155_413), .init(name: "model.safetensors", size: 2_183_295_977)]),
         TranslationModel(
-            id: "qwen3-4b-instruct-2507-4bit", name: "Qwen3 4B",
+            id: "qwen3-4b-instruct-2507-4bit", name: "Qwen3 4B", tagline: "Speaks sooner",
             summary: "The quickest in conversation: it also judges when a thought is complete, so it speaks sooner. Less natural English, and the odd wrong word.",
             repo: "mlx-community/Qwen3-4B-Instruct-2507-4bit", revision: "50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b",
             style: .instructions, memoryGB: 2.8,
@@ -79,7 +81,7 @@ public enum ModelCatalog {
     // errors). Both judge less well than Qwen (13 and 12 of 17).
     static let gemma4: [TranslationModel] = [
         TranslationModel(
-            id: "gemma-4-e4b-it-4bit", name: "Gemma 4 E4B",
+            id: "gemma-4-e4b-it-4bit", name: "Gemma 4 E4B", tagline: "Near-best, speaks sooner",
             summary: "Nearly TranslateGemma's quality and also judges when a thought is complete, but needs a Mac or an iPhone with 12 GB.",
             repo: "mlx-community/gemma-4-e4b-it-4bit", revision: "475b9088d29754a3379866cf5aeb6b41acd313c2",
             style: .instructions, memoryGB: 4.7,
@@ -88,7 +90,7 @@ public enum ModelCatalog {
                     .init(name: "processor_config.json", size: 1316), .init(name: "tokenizer.json", size: 32_169_626),
                     .init(name: "tokenizer_config.json", size: 2740), .init(name: "model.safetensors", size: 5_146_800_534)]),
         TranslationModel(
-            id: "gemma-4-e2b-it-4bit", name: "Gemma 4 E2B",
+            id: "gemma-4-e2b-it-4bit", name: "Gemma 4 E2B", tagline: "Fastest, roughest",
             summary: "The fastest, for a smooth run on a busy phone; rougher translations, more often wrong on details.",
             repo: "mlx-community/gemma-4-e2b-it-4bit", revision: "238767527555cb75a05732a84dff5d6ba0dd6809",
             style: .instructions, memoryGB: 3.0,

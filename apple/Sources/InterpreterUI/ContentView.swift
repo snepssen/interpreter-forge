@@ -14,7 +14,7 @@ public struct ContentView: View {
     @Bindable var session: LiveSession
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("showEnglish") private var showEnglish = true
-    @State private var managingModels = false
+    @State private var showingSettings = false
     @State private var dark = false
     #if os(iOS)
     @State private var output = PhoneOutput.current
@@ -29,7 +29,7 @@ public struct ContentView: View {
             controls
         }
         .background(InterfaceStyle.canvas)
-        .sheet(isPresented: $managingModels) { ModelManager(session: session) }
+        .sheet(isPresented: $showingSettings) { SettingsView(session: session) }
         #if os(iOS)
         .fullScreenCover(isPresented: $dark) { DarkScreen(session: session) }
         .onChange(of: session.isLive, initial: true) { _, live in
@@ -58,8 +58,7 @@ public struct ContentView: View {
                 iconButton("moon", label: "Darken the screen") { dark = true }
             }
             #endif
-            if !session.isLive { transcriptMenu }
-            iconButton("gearshape", label: "Settings") { managingModels = true }
+            iconButton("gearshape", label: "Settings") { showingSettings = true }
         }
         .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 4)
     }
@@ -71,20 +70,6 @@ public struct ContentView: View {
         }
         .buttonStyle(.plain).foregroundStyle(Color.accentColor)
         .help(label).accessibilityLabel(label)
-    }
-
-    private var transcriptMenu: some View {
-        Menu {
-            Toggle("Show English lines", isOn: $showEnglish)
-            Divider()
-            Button("Clear conversation", systemImage: "trash", role: .destructive) { session.clear() }
-                .disabled(session.lines.isEmpty)
-        } label: {
-            Image(systemName: "ellipsis.circle").font(.title3)
-                .frame(width: 44, height: 44).contentShape(Rectangle())
-        }
-        .iconMenu().fixedSize()
-        .help("Conversation options").accessibilityLabel("Conversation options")
     }
 
     // MARK: conversation

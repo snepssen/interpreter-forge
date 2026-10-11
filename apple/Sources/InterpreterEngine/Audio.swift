@@ -224,6 +224,13 @@ public final class Speaker: @unchecked Sendable {
         }
     }
 
+    /// How loud the interpreter is, from 0 to 1; takes effect at once, queued
+    /// clips included.
+    public var volume: Float {
+        get { player.volume }
+        set { player.volume = max(0, min(1, newValue)) }
+    }
+
     /// Seconds of English still waiting to be heard.
     public var backlog: Double { lock.withLock { max(0, end - clock()) } }
 
