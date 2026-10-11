@@ -27,11 +27,16 @@ public struct ContentView: View {
         .background(Color(nsColor: .textBackgroundColor))
         #else
         VStack(spacing: 0) {
-            HStack {
+            // The gear first in priority: the language menu gives way, truncating,
+            // rather than pushing the controls off a phone-width screen.
+            HStack(spacing: 12) {
                 LanguageMenu(languages: $session.languages, disabled: session.isLive)
-                Spacer()
-                Toggle("English", isOn: $showEnglish).fixedSize()
-                modelsButton
+                    .layoutPriority(-1)
+                Spacer(minLength: 0)
+                Toggle(isOn: $showEnglish) { Text("EN").font(.caption.bold()) }
+                    .fixedSize()
+                    .accessibilityLabel("Show English")
+                modelsButton.font(.title3)
             }
             .font(.subheadline)
             .padding(.horizontal, 16).padding(.vertical, 10)
@@ -244,8 +249,10 @@ struct LanguageMenu: View {
         }
         #if os(macOS)
         .menuStyle(.borderlessButton)
-        #endif
         .fixedSize()
+        #else
+        .lineLimit(1)
+        #endif
         .disabled(disabled)
         .help("Any language by default. Name the languages spoken here to treat anything else as misheard.")
     }
