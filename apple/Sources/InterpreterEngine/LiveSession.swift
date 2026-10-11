@@ -28,12 +28,16 @@ public final class LiveSession {
         public var brief = false
         public var pace = 1.0
         public var at: Date
+        /// Who spoke it, when the detector is sure: for the line's language chip.
+        public var language: String?
     }
 
     public private(set) var phase: Phase = .idle
     public private(set) var lines: [Line] = []
     public private(set) var hearing = ""
     public private(set) var level: Float = 0
+    /// English is playing in the headphones right now.
+    public private(set) var speaking = false
     public private(set) var notice: String?
 
     /// English alone means any language: everything that isn't English is
@@ -87,6 +91,7 @@ public final class LiveSession {
     private var starting = false
     private var lineIDs: [Int: Int] = [:]
     private var nextLineID = 0
+    private var sessionStart = 0
     public var isBusy: Bool { preparationID != nil || starting || shutdownTask != nil }
     private var audioObservers: [NSObjectProtocol] = []
 
@@ -205,6 +210,7 @@ public final class LiveSession {
         meter = Task { [weak self] in
             while !Task.isCancelled {
                 self?.level = pipeline.level
+                self?.speaking = (pipeline.speaker?.backlog ?? 0) > 0.05
                 try? await Task.sleep(for: .milliseconds(80))
             }
         }
@@ -310,6 +316,7 @@ public final class LiveSession {
         meter?.cancel()
         meter = nil
         level = 0
+        speaking = false
         hearing = ""
         if phase == .live { phase = .ready }
     }
@@ -375,7 +382,15 @@ public final class LiveSession {
 
     public func clear() { lines.removeAll() }
 
-    func beginTranscript() { lineIDs.removeAll() }
+    func beginTranscript() {
+        lineIDs.removeAll()
+        sessionStart = nextLineID
+    }
+
+    /// A piece of this session is waiting for its translation.
+    public var translating: Bool {
+        isLive && lines.contains { $0.id >= sessionStart && $0.translation == nil && $0.silence == nil }
+    }
 
     func apply(_ event: PipelineEvent) {
         switch event {
@@ -383,13 +398,15 @@ public final class LiveSession {
             hearing = text
         case .committed(let segment):
             lineIDs[segment.index] = nextLineID
-            lines.append(Line(id: nextLineID, source: segment.text, reason: segment.reason, at: Date()))
+            lines.append(Line(id: nextLineID, source: segment.text, reason: segment.reason, at: Date(),
+                              language: Self.language(of: segment.text)))
             nextLineID += 1
         case .silent(let index, let why, let translation):
             guard let id = lineIDs[index] else { return }
             update(id) {
                 $0.silence = why
                 $0.translation = translation
+                if why == .english { $0.language = "en" }
             }
         case .interpreted(let indices, let translation, _, let lags, let brief, let pace):
             let ids = indices.compactMap { lineIDs[$0] }
@@ -399,6 +416,7 @@ public final class LiveSession {
             lines.removeAll { ids.dropFirst().contains($0.id) }
             update(first) {
                 $0.source = ([$0.source] + merged).joined(separator: " ")
+                $0.language = Self.language(of: $0.source) ?? $0.language
                 $0.translation = translation
                 $0.lag = lags.max()
                 $0.brief = brief
@@ -409,6 +427,15 @@ public final class LiveSession {
             phase = .failed(message)
             notice = message
         }
+    }
+
+    private static let detector = LanguageDetector()
+
+    /// A label, not a decision: the linguist has its own, with context. Short
+    /// replies ("Igen") get no chip rather than a wrong one.
+    static func language(of text: String) -> String? {
+        guard let guess = detector.guess(text), guess.confidence >= 0.6 else { return nil }
+        return guess.code
     }
 
     private func update(_ index: Int, _ change: (inout Line) -> Void) {
