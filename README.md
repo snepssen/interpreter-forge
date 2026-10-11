@@ -35,12 +35,33 @@ iPhone on the table through Continuity hears the room better than AirPods)
 and the output from the top bar. The first launch downloads Parakeet (a few
 hundred MB).
 
+You choose the translation model: a picker on first launch, and a model
+manager (the gear) to download, switch or delete them later, since not
+everyone needs the same one and a smaller model runs smoother. Measured with
+`scripts/compare-models.py` (26 lines across 13 languages, the judge's 17
+cases) and `tcrun` (8 minutes of fast Polish and Hungarian):
+
+| model | meaning errors | judge | peak memory | median lag in conversation |
+|---|---|---|---|---|
+| TranslateGemma 4B (recommended) | 0 of 26, the most natural | — | 2.6 GB | 6.7 s |
+| Qwen3 4B | 3 | 17/17 | 2.8 GB | 4.4 s |
+| Gemma 4 E4B | 1, nearly as natural | 13/17 | 4.7 GB (Mac, 12 GB iPhones) | — |
+| Gemma 4 E2B | 5 | 12/17 | 3.0 GB | — (fastest per line, 0.6 s) |
+
+TranslateGemma is told the source language, by Apple's on-device language
+detector (30 of 35 test lines; misses only on two-word or garbled pieces,
+where it falls back to the last language it was sure of). The same detector
+now decides what is English, and in restricted mode what is misheard, so the
+gate is the same whichever model is loaded. Only a general model judges when
+a thought is complete; with TranslateGemma pieces are cut on pauses,
+punctuation and the 5 s ceiling, which is why it speaks later. Gemma 4 has
+its thinking switched off: left on, it reasons for seconds over every line.
+
 The iPhone app (`apple/iOS/build-ios.sh`, iOS 17+) is the same engine and
 views. On an iPhone 17 (8 GB) the 4B translation model fits with the
 increased-memory entitlement, at 3.4–4.0 s lag in a first real test. The
 phone's own mic listens, AirPods play the English in full quality, and it
-keeps going with the screen locked. The first launch downloads the
-translation model (2.3 GB).
+keeps going with the screen locked.
 
 | | Python (MLX) | Swift app |
 |---|---|---|

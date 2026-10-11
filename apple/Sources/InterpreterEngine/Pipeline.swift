@@ -89,7 +89,13 @@ public final class Pipeline: @unchecked Sendable {
     private func listen(_ source: AudioSource, _ vad: SileroVAD, _ events: @Sendable (PipelineEvent) -> Void) async {
         let buffer = source.buffer
         let linguist = linguist
-        let segmenter = Segmenter(config: config) { text in (try? await linguist.complete(text)) ?? true }
+        // Only a general model judges; without one the segmenter cuts on pauses
+        // and punctuation alone, rather than on a judge that always says yes.
+        var judge: (@Sendable (String) async -> Bool)?
+        if linguist.model.judges {
+            judge = { @Sendable text in (try? await linguist.complete(text)) ?? true }
+        }
+        let segmenter = Segmenter(config: config, judge: judge)
         var vadAt = 0
         var lastHop = 0.0
         while !Task.isCancelled {
@@ -147,7 +153,7 @@ public final class Pipeline: @unchecked Sendable {
                 // aside, the rest merged into a single translation.
                 var foreign: [Segment] = []
                 for segment in waiting {
-                    if let why = try await linguist.gate(segment.text) {
+                    if let why = await linguist.gate(segment.text) {
                         if why == .english { await linguist.remember(segment.text) }
                         events(.silent(index: segment.index, why, translation: nil))
                     } else {

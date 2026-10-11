@@ -9,6 +9,8 @@ import Observation
 public final class LiveSession {
     public enum Phase: Equatable {
         case idle
+        /// No translation model downloaded yet: the picker's turn.
+        case choosingModel
         case loading(String)
         case ready
         case live
@@ -51,6 +53,14 @@ public final class LiveSession {
     }
 
     public var anyLanguage: Bool { !languages.contains { $0 != "en" } }
+    /// The translation model in use, chosen in the picker or the manager; remembered.
+    public private(set) var translationModel: TranslationModel? =
+        ModelCatalog.model(UserDefaults.standard.string(forKey: "translationModel"))
+    /// Downloads under way, by model id, from 0 to 1.
+    public private(set) var downloads: [String: Double] = [:]
+    /// Bumped when models come or go, so views listing them look again.
+    public private(set) var storeChanges = 0
+
     /// Device names (or part of them); nil for the system's.
     public var microphone: String?
     public var speaker: String?
@@ -67,29 +77,34 @@ public final class LiveSession {
 
     /// Load the three models; the first run downloads Parakeet (a few hundred MB).
     public func prepare() async {
-        guard phase == .idle || phase.isFailure else { return }
+        guard phase == .idle || phase == .choosingModel || phase.isFailure else { return }
+        guard let model = translationModel, let modelURL = ModelStore.location(of: model) else {
+            phase = .choosingModel
+            return
+        }
         do {
-            if Resources.translationModel == nil { phase = .loading("Downloading the translation model…") }
-            let model = try await ModelStore.translationModel { fraction in
-                Task { @MainActor in
-                    self.phase = .loading("Downloading the translation model… \(Int(fraction * 100))% of 2.3 GB")
-                }
-            }
             guard let voiceURL = Resources.voice, let espeak = Resources.espeakData else {
                 throw Problem("No voice. Build with build.sh, or keep voice-forge beside translate-core.")
             }
-            phase = .loading("Loading speech recognition…")
-            recognizer = try await Recognizer.load(languages: languages) { fraction in
-                Task { @MainActor in
-                    if case .loading = self.phase, fraction < 1 {
-                        self.phase = .loading("Downloading speech recognition… \(Int(fraction * 100))%")
+            if recognizer == nil {
+                phase = .loading("Loading speech recognition…")
+                recognizer = try await Recognizer.load(languages: languages) { fraction in
+                    Task { @MainActor in
+                        if case .loading = self.phase, fraction < 1 {
+                            self.phase = .loading("Downloading speech recognition… \(Int(fraction * 100))%")
+                        }
                     }
                 }
             }
-            phase = .loading("Loading the translation model…")
-            linguist = try await Linguist(model: model, languages: languages)
-            phase = .loading("Loading the voice…")
-            voice = try Voice(model: voiceURL, espeakData: espeak)
+            if linguist?.model != model {
+                linguist = nil  // one translation model in memory at a time
+                phase = .loading("Loading \(model.name)…")
+                linguist = try await Linguist(model: model, at: modelURL, languages: languages)
+            }
+            if voice == nil {
+                phase = .loading("Loading the voice…")
+                voice = try Voice(model: voiceURL, espeakData: espeak)
+            }
             phase = .loading("Warming up…")
             try await linguist?.warmUp()
             phase = .ready
@@ -136,6 +151,50 @@ public final class LiveSession {
         case .notDetermined: await AVCaptureDevice.requestAccess(for: .audio)
         default: false
         }
+    }
+
+    // MARK: models
+
+    /// Fetch a model; progress shows in `downloads`. Use it straight away if
+    /// none is in use yet.
+    public func download(_ model: TranslationModel) async {
+        guard downloads[model.id] == nil else { return }
+        downloads[model.id] = 0
+        defer {
+            downloads[model.id] = nil
+            storeChanges += 1
+        }
+        do {
+            try await ModelStore.download(model) { fraction in
+                Task { @MainActor in self.downloads[model.id] = fraction }
+            }
+            if translationModel == nil || ModelStore.location(of: translationModel!) == nil { await use(model) }
+        } catch {
+            notice = "Couldn't download \(model.name): \(error.localizedDescription)"
+        }
+    }
+
+    /// Switch the translation model; the old one leaves memory first.
+    public func use(_ model: TranslationModel) async {
+        guard model != translationModel || linguist == nil else { return }
+        if isLive { stop() }
+        translationModel = model
+        UserDefaults.standard.set(model.id, forKey: "translationModel")
+        linguist = nil
+        phase = .idle
+        await prepare()
+    }
+
+    public func delete(_ model: TranslationModel) {
+        if model == translationModel {
+            if isLive { stop() }
+            linguist = nil
+            translationModel = nil
+            UserDefaults.standard.removeObject(forKey: "translationModel")
+            phase = .choosingModel
+        }
+        do { try ModelStore.delete(model) } catch { notice = "Couldn't delete \(model.name): \(error.localizedDescription)" }
+        storeChanges += 1
     }
 
     public func stop() {

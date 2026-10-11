@@ -20,16 +20,6 @@ public enum Resources {
 
     public static var vad: URL? { first(bundled("silero_vad.onnx"), checkout.appending(path: "models/silero_vad.onnx")) }
 
-    /// Qwen3-4B-Instruct-2507, 4-bit MLX: `scripts/fetch-models.sh` puts it in models/.
-    public static var translationModel: URL? {
-        let name = "qwen3-4b-instruct-2507-4bit"
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appending(path: "Interpreter/Models/\(name)")
-        // The weights come last in a download, so a folder without them is unfinished.
-        return [support, checkout.appending(path: "models/\(name)")].compactMap { $0 }
-            .first { FileManager.default.fileExists(atPath: $0.appending(path: "model.safetensors").path) }
-    }
-
     private static func bundled(_ name: String) -> URL? { Bundle.main.resourceURL?.appending(path: name) }
 
     private static func first(_ candidates: URL?...) -> URL? {

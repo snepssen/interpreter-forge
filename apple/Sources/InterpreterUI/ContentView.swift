@@ -6,10 +6,16 @@ import SwiftUI
 public struct ContentView: View {
     @Bindable var session: LiveSession
     @State private var showEnglish = true
+    @State private var managingModels = false
 
     public init(session: LiveSession) { self.session = session }
 
     public var body: some View {
+        main
+            .sheet(isPresented: $managingModels) { ModelManager(session: session) }
+    }
+
+    @ViewBuilder private var main: some View {
         #if os(macOS)
         VStack(spacing: 0) {
             controls
@@ -25,6 +31,7 @@ public struct ContentView: View {
                 LanguageMenu(languages: $session.languages, disabled: session.isLive)
                 Spacer()
                 Toggle("English", isOn: $showEnglish).fixedSize()
+                modelsButton
             }
             .font(.subheadline)
             .padding(.horizontal, 16).padding(.vertical, 10)
@@ -56,10 +63,18 @@ public struct ContentView: View {
             Toggle("English", isOn: $showEnglish)
                 .toggleStyle(.switch).controlSize(.small)
                 .help("Show what was said in English, kept as context and not spoken")
+            modelsButton
         }
         .padding(14)
     }
     #endif
+
+    private var modelsButton: some View {
+        Button { managingModels = true } label: { Image(systemName: "gearshape") }
+            .buttonStyle(.borderless)
+            .help("Models: download, switch, delete")
+            .accessibilityLabel("Models")
+    }
 
     // MARK: middle
 
@@ -87,6 +102,8 @@ public struct ContentView: View {
     @ViewBuilder private var placeholder: some View {
         VStack(alignment: .leading, spacing: 8) {
             switch session.phase {
+            case .choosingModel:
+                ModelPicker(session: session)
             case .loading(let what):
                 ProgressView().controlSize(.small)
                 Text(what).foregroundStyle(.secondary)

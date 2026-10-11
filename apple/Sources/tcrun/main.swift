@@ -2,7 +2,7 @@
 // measuring what the app does without a microphone: the same loop, the same
 // models, the same contention. The Python rig's `live --from`, in Swift.
 //
-//   tcrun <audio> [--languages en,pl,hu,nl]   (default: any language) [--out runs/swift-<name>]
+//   tcrun <audio> [--model translategemma-4b-it-4bit] [--languages en,pl,hu,nl]   (default: any language) [--out runs/swift-<name>]
 import AVFoundation
 import FluidAudio
 import Foundation
@@ -16,6 +16,7 @@ var args = Array(CommandLine.arguments.dropFirst())
     return args[i + 1]
 }
 let languages = (option("--languages") ?? "en").split(separator: ",").map(String.init)
+let modelID = option("--model") ?? ModelCatalog.recommended.id
 let outOption = option("--out")
 guard let input = args.first else {
     print("usage: tcrun <audio> [--languages en,pl,hu,nl] [--out dir]")
@@ -28,14 +29,15 @@ func info(_ message: String) { FileHandle.standardError.write(Data("· \(message
 
 let samples = try AudioConverter().resampleAudioFile(inputURL)
 info(String(format: "%@: %.1f s", inputURL.lastPathComponent, Double(samples.count) / 16_000))
-guard let model = Resources.translationModel, let voiceURL = Resources.voice, let espeak = Resources.espeakData,
-      let vad = Resources.vad else {
-    print("missing a model: translation \(Resources.translationModel != nil), voice \(Resources.voice != nil), VAD \(Resources.vad != nil)")
+guard let model = ModelCatalog.model(modelID), let modelURL = ModelStore.location(of: model),
+      let voiceURL = Resources.voice, let espeak = Resources.espeakData, let vad = Resources.vad else {
+    print("missing: translation model \(modelID) (one of \(ModelCatalog.translation.map(\.id))), voice \(Resources.voice != nil), VAD \(Resources.vad != nil)")
     exit(1)
 }
 info("loading")
 let recognizer = try await Recognizer.load(languages: languages)
-let linguist = try await Linguist(model: model, languages: languages)
+let linguist = try await Linguist(model: model, at: modelURL, languages: languages)
+info("translating with \(model.name)" + (model.judges ? "" : ", cutting without a judge"))
 let voice = try Voice(model: voiceURL, espeakData: espeak)
 try await linguist.warmUp()
 
