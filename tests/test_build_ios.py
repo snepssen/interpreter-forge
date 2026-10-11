@@ -34,6 +34,10 @@ def test_ios_never_installs_a_stale_product(tmp_path, mode, expected_calls, succ
     tool("xcrun", 'echo invoked >> "$INSTALL_TRACE"\nexit 99\n')
     tool("codesign", 'echo verified >> "$SIGN_TRACE"\n')
     tool("xcodebuild", '''echo build >> "$BUILD_TRACE"
+case "$*" in
+  *"-scheme InterpreterPhone "*) ;;
+  *) echo "installer selected the wrong scheme" >&2; exit 66;;
+esac
 [ "$BUILD_MODE" != build_fails ] || exit 65
 case "$*" in
   *"clean build")

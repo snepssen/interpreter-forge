@@ -9,7 +9,7 @@ Everything runs locally.
                   ▲      │
                   └ ASR ◀┘  re-reads the uncommitted tail every 0.5 s
 
-First target: **any European language → English**, on an Apple Silicon Mac.
+**European languages → English**, on Apple Silicon Macs and iPhones.
 
 | stage     | model                                        |
 |-----------|----------------------------------------------|
@@ -21,7 +21,7 @@ First target: **any European language → English**, on an Apple Silicon Mac.
 ## The Mac app
 
 `apple/` is the native app the Python here measures for: SwiftUI, macOS 14+,
-with the same core shared by the iPhone app to come.
+with the same engine and views shared by the iPhone app.
 
     scripts/fetch-models.sh        # the translation model, if not done already
     apple/build.sh                 # checks, then apple/Interpreter.app
@@ -32,7 +32,9 @@ language is translated by default; naming the languages spoken here makes
 anything else count as misheard (useful where Polish keeps coming out as
 Russian, but it silences a Romanian guest, so it is opt-in). Pick the mic (an
 iPhone on the table through Continuity hears the room better than AirPods)
-and the output from the top bar. The first launch downloads Parakeet (a few
+and the output from the top bar. Use **Transcript options** to show or hide
+English context or clear a stopped conversation. Translations appear in cards,
+with the original speech underneath and a delay label. The first launch downloads Parakeet (a few
 hundred MB).
 
 You choose the translation model: a picker on first launch, and a model
@@ -72,7 +74,17 @@ lock/unlock followed by restarting Live were checked on the updated iPhone.
 that a new bundle contains the expected executable and bundle identifier and
 passes signature verification before installing. `--no-install` runs those
 same checks without touching the phone. Dependency and compilation caches stay
-in place.
+in place. The explicit **InterpreterPhone** scheme selects the iOS app;
+the Swift package's similarly named Mac executable is a different target.
+
+The phone uses one audio engine for capture and playback. Delayed startup
+notifications with an unchanged route do not stop Live; actual device/format
+changes, stopped engines, interruptions and media resets still ask for a
+restart. The updated phone was checked to stay live and display speech.
+
+See [the code review](docs/code-review-2026-10-11.md) for engine fixes and
+verification, and [the UI notes](docs/ui-polish-2026-10-11.md) for the shared
+Mac/iPhone interface changes.
 
 Speech recognition models use FluidAudio's Application Support directory.
 The installer has no uninstall step. An in-place update was checked on the

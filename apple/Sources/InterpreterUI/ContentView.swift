@@ -2,100 +2,121 @@ import InterpreterCore
 import InterpreterEngine
 import SwiftUI
 
-/// The whole app, on a Mac or an iPhone: what is said, translated, as it comes.
+/// The shared conversation screen, with platform-specific audio controls.
 public struct ContentView: View {
     @Bindable var session: LiveSession
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showEnglish = true
     @State private var managingModels = false
 
     public init(session: LiveSession) { self.session = session }
 
     public var body: some View {
-        main
-            .sheet(isPresented: $managingModels) { ModelManager(session: session) }
-    }
-
-    @ViewBuilder private var main: some View {
-        #if os(macOS)
         VStack(spacing: 0) {
-            controls
+            header
             Divider()
             feed
+            #if os(macOS)
             Divider()
-            listening
+            listening.padding(16)
+            #endif
         }
-        .background(Color(nsColor: .textBackgroundColor))
-        #else
-        VStack(spacing: 0) {
-            // The gear first in priority: the language menu gives way, truncating,
-            // rather than pushing the controls off a phone-width screen.
-            HStack(spacing: 12) {
-                LanguageMenu(languages: $session.languages, disabled: session.isLive)
-                    .layoutPriority(-1)
-                Spacer(minLength: 0)
-                Toggle(isOn: $showEnglish) { Text("EN").font(.caption.bold()) }
-                    .fixedSize()
-                    .accessibilityLabel("Show English")
-                modelsButton.font(.title3)
+        .background(InterfaceStyle.canvas)
+        #if os(iOS)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 12) {
+                Divider()
+                listening
+                LiveButton(session: session, large: true)
             }
-            .font(.subheadline)
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            Divider()
-            feed
-            Divider()
-            listening
-            LiveButton(session: session, large: true)
-                .padding(.horizontal, 16).padding(.bottom, 12)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .background(.bar)
         }
         #endif
+        .sheet(isPresented: $managingModels) { ModelManager(session: session) }
     }
 
-    // MARK: top
-
-    #if os(macOS)
-    private var controls: some View {
-        HStack(spacing: 14) {
-            LiveButton(session: session)
-            VStack(alignment: .leading, spacing: 6) {
-                LanguageMenu(languages: $session.languages, disabled: session.isLive)
-                HStack(spacing: 8) {
-                    DevicePicker(title: "Mic", input: true, selection: $session.microphone)
-                    DevicePicker(title: "Out", input: false, selection: $session.speaker)
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                Image(systemName: "waveform")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 44, height: 44)
+                    .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Interpreter").font(.title2.bold())
+                    Text("Translation on this device").font(.caption).foregroundStyle(.secondary)
                 }
-                .disabled(session.isLive)
+                Spacer(minLength: 8)
+                #if os(macOS)
+                LiveButton(session: session)
+                #endif
+                Button { managingModels = true } label: {
+                    Image(systemName: "gearshape")
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                        .background(InterfaceStyle.surface, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .help("Download and manage models")
+                .accessibilityLabel("Models")
             }
-            Spacer()
-            Toggle("English", isOn: $showEnglish)
-                .toggleStyle(.switch).controlSize(.small)
-                .help("Show what was said in English, kept as context and not spoken")
-            modelsButton
+            HStack(spacing: 12) {
+                LanguageMenu(languages: $session.languages, disabled: session.isLive || session.isBusy)
+                Spacer(minLength: 0)
+                SessionStatus(phase: session.phase)
+            }
+            #if os(macOS)
+            HStack(spacing: 16) {
+                DevicePicker(title: "Microphone", input: true, selection: $session.microphone)
+                DevicePicker(title: "Listen through", input: false, selection: $session.speaker)
+            }
+            .disabled(session.isLive || session.isBusy)
+            #endif
         }
-        .padding(14)
+        .padding(16)
+        .background(.bar)
     }
-    #endif
-
-    private var modelsButton: some View {
-        Button { managingModels = true } label: { Image(systemName: "gearshape") }
-            .buttonStyle(.borderless)
-            .help("Models: download, switch, delete")
-            .accessibilityLabel("Models")
-    }
-
-    // MARK: middle
 
     private var feed: some View {
         ScrollViewReader { scroll in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("Conversation").font(.headline)
+                        Spacer()
+                        Menu {
+                            Toggle("Show English context", isOn: $showEnglish)
+                            Divider()
+                            Button("Clear conversation", systemImage: "trash") { session.clear() }
+                                .disabled(session.lines.isEmpty || session.isLive)
+                        } label: {
+                            Image(systemName: "line.3.horizontal.decrease")
+                                .frame(width: 44, height: 44)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .fixedSize()
+                        .help("Transcript options")
+                        .accessibilityLabel("Transcript options")
+                    }
                     if showStatus { placeholder }
                     ForEach(visible) { line in
-                        LineView(line: line).id(line.id)
+                        LineView(line: line, isLive: session.isLive).id(line.id)
                     }
                 }
+                .frame(maxWidth: 820)
+                .frame(maxWidth: .infinity)
                 .padding(16)
             }
             .onChange(of: session.lines) {
-                if let last = visible.last { withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo(last.id, anchor: .bottom) } }
+                if let last = visible.last {
+                    if reduceMotion { scroll.scrollTo(last.id, anchor: .bottom) }
+                    else { withAnimation(.easeOut(duration: 0.2)) { scroll.scrollTo(last.id, anchor: .bottom) } }
+                }
             }
         }
     }
@@ -112,160 +133,245 @@ public struct ContentView: View {
     }
 
     @ViewBuilder private var placeholder: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            switch session.phase {
-            case .choosingModel:
-                ModelPicker(session: session)
-            case .loading(let what):
-                ProgressView().controlSize(.small)
-                Text(what).foregroundStyle(.secondary)
-            case .failed(let why):
-                Label(why, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+        switch session.phase {
+        case .choosingModel:
+            ModelPicker(session: session)
+        case .loading(let what):
+            statusPanel(title: "Getting ready", detail: what, symbol: "waveform") {
+                ProgressView().controlSize(.regular)
+            }
+        case .idle:
+            statusPanel(title: "Getting ready", detail: "Preparing your interpreter…", symbol: "waveform") {
+                ProgressView().controlSize(.regular)
+            }
+        case .failed(let why):
+            statusPanel(title: "Interpreter needs attention", detail: why, symbol: "exclamationmark.triangle") {
                 Button("Try again") { Task { await session.prepare() } }
-            case .ready:
-                Text("Press Live and put your headphones in.").font(.title3)
-                Text(session.anyLanguage
-                     ? "Speech in any language is interpreted into English as it comes; English is left alone."
-                     : "Speech in \(Languages.list(session.languages.filter { $0 != "en" })) is interpreted into English as it comes; English is left alone, anything else is taken as misheard.")
-                    .foregroundStyle(.secondary)
-            default:
-                Text("Listening…").foregroundStyle(.secondary)
+                    .buttonStyle(.borderedProminent).disabled(session.isBusy)
+            }
+        case .ready:
+            statusPanel(title: "Ready to listen", detail: readyDescription, symbol: "headphones") {
+                Label("English speech stays quiet and provides context.", systemImage: "text.bubble")
+                    .font(.callout).foregroundStyle(.secondary)
+                #if os(iOS)
+                Text("Keep Interpreter open while listening.")
+                    .font(.caption).foregroundStyle(.secondary)
+                #endif
+            }
+        case .live:
+            statusPanel(title: "Listening for speech", detail: "English translations will appear here as people speak.", symbol: "waveform") {
+                Text("You can stop at any time.").font(.callout).foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 40)
     }
 
-    // MARK: bottom
+    private var readyDescription: String {
+        if session.anyLanguage { return "Press Live to hear the conversation in English. Headphones work best." }
+        return "Press Live to interpret \(Languages.list(session.languages.filter { $0 != "en" })) into English. Other languages are skipped."
+    }
+
+    private func statusPanel<Actions: View>(title: String, detail: String, symbol: String,
+                                           @ViewBuilder actions: () -> Actions) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Image(systemName: symbol)
+                .font(.largeTitle).foregroundStyle(Color.accentColor)
+                .accessibilityHidden(true)
+            Text(title).font(.title2.bold())
+            Text(detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            actions()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 16)
+        .panel()
+    }
 
     private var listening: some View {
-        HStack(spacing: 12) {
-            LevelMeter(level: session.level).frame(width: 70, height: 6)
-            if let notice = session.notice, !session.isLive {
-                Label(notice, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange).lineLimit(2)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 7) {
+                Image(systemName: session.isLive ? "mic.fill" : "mic")
+                    .foregroundStyle(session.isLive ? Color.accentColor : .secondary)
+                LevelMeter(level: session.level).frame(width: 44, height: 5)
+            }
+            .accessibilityHidden(true)
+            if let notice = session.notice {
+                Label {
+                    Text(notice).foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(session.hearing.isEmpty ? (session.isLive ? "Listening" : " ") : session.hearing)
-                    .lineLimit(1).truncationMode(.head)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if let notice = session.notice {
-                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange).help(notice)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.isLive ? "Listening" : "Microphone off").fontWeight(.medium)
+                    if session.isLive {
+                        Text(session.hearing.isEmpty ? "Waiting for speech…" : session.hearing)
+                            .foregroundStyle(.secondary).lineLimit(3)
+                    } else if let model = session.translationModel {
+                        Text(model.name).foregroundStyle(.secondary)
+                    }
                 }
-            }
-            if !session.lines.isEmpty && !session.isLive {
-                Button("Clear") { session.clear() }.buttonStyle(.borderless)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .font(.callout)
-        .padding(.horizontal, 14).padding(.vertical, 10)
     }
 }
 
-/// The one control that matters.
 struct LiveButton: View {
     let session: LiveSession
     var large = false
+    private var enabled: Bool { !session.isBusy && (session.phase == .ready || session.isLive) }
 
     var body: some View {
         Button {
             Task { session.isLive ? session.stop() : await session.start() }
         } label: {
-            HStack(spacing: 8) {
-                Circle().fill(session.isLive ? Color.red : Color.secondary.opacity(0.5)).frame(width: 12, height: 12)
-                Text(session.isLive ? "Stop" : "Live").font(large ? .title3.bold() : .headline)
-            }
-            .frame(maxWidth: large ? .infinity : nil)
-            .padding(.horizontal, 18).padding(.vertical, large ? 16 : 10)
-            .background(session.isLive ? Color.red.opacity(0.12) : Color.accentColor.opacity(0.12), in: Capsule())
-            .contentShape(Capsule())
+            Label(session.isLive ? "Stop" : "Live", systemImage: session.isLive ? "stop.fill" : "mic.fill")
+                .font(.title3.bold())
+                .frame(minWidth: large ? 0 : 88, maxWidth: large ? .infinity : nil, minHeight: large ? 54 : 44)
+                .padding(.horizontal, 16)
+                .foregroundStyle(.white)
+                .background(session.isLive ? Color.red : Color.accentColor, in: RoundedRectangle(cornerRadius: 14))
+                .opacity(enabled ? 1 : 0.4)
+                .contentShape(RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(.plain)
-        .disabled(session.isBusy || !(session.phase == .ready || session.isLive))
+        .buttonStyle(.plain).disabled(!enabled)
         .keyboardShortcut(.space, modifiers: [])
         .help("Start or stop interpreting (Space)")
+        .accessibilityLabel(session.isLive ? "Stop interpreting" : "Start interpreting")
+    }
+}
+
+struct SessionStatus: View {
+    let phase: LiveSession.Phase
+    private var title: String {
+        switch phase {
+        case .live: "Live"
+        case .ready: "Ready"
+        case .failed: "Needs attention"
+        case .choosingModel: "Setup"
+        default: "Preparing"
+        }
+    }
+    private var tint: Color {
+        switch phase {
+        case .live: .green
+        case .ready: .accentColor
+        case .failed: .orange
+        default: .secondary
+        }
+    }
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle().fill(tint).frame(width: 6, height: 6).accessibilityHidden(true)
+            Text(title).font(.caption.weight(.semibold))
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(tint.opacity(0.1), in: Capsule())
+        .fixedSize()
+        .accessibilityLabel("Status: \(title)")
     }
 }
 
 struct LineView: View {
     let line: LiveSession.Line
+    var isLive = true
+
+    private var heading: String {
+        switch line.silence {
+        case .english?: "English context"
+        case .echo?: "Echo skipped"
+        case .language?: "Outside selected languages"
+        case .unclear?: "Please repeat"
+        case nil: line.translation == nil ? "Speech" : "English translation"
+        }
+    }
+    private var tint: Color { line.silence == .unclear ? .orange : (line.silence == nil ? .accentColor : .secondary) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            switch line.silence {
-            case .english?, .echo?:
-                Text(line.source).foregroundStyle(.secondary)
-            case .language?:
-                Text(line.source).foregroundStyle(.tertiary).strikethrough()
-                    .help("Not in any language expected here: taken as misheard, not spoken")
-            case .unclear?:
-                Text(line.source).foregroundStyle(.secondary).textSelection(.enabled)
-                Label(line.translation ?? "Please repeat this piece.", systemImage: "questionmark.circle")
-                    .font(.callout).foregroundStyle(.orange)
-            case nil:
-                if let translation = line.translation {
-                    Text(translation).font(.title3).textSelection(.enabled)
-                } else {
-                    Text("…").font(.title3).foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(heading).font(.caption.weight(.semibold)).foregroundStyle(tint)
+                Spacer(minLength: 8)
+                if let lag = line.lag {
+                    Text(String(format: "%.1f s", lag)).font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                        .accessibilityLabel(String(format: "Translation delay %.1f seconds", lag))
                 }
-                HStack(spacing: 6) {
-                    Text(line.source).foregroundStyle(.secondary).textSelection(.enabled)
-                    if let lag = line.lag {
-                        Text(String(format: "%.1f s", lag)).monospacedDigit().foregroundStyle(.tertiary)
-                    }
-                    if line.brief { Text("brief").foregroundStyle(.tertiary) }
+            }
+            switch line.silence {
+            case .english?, .echo?, .language?:
+                Text(line.source).foregroundStyle(.secondary).textSelection(.enabled)
+            case .unclear?:
+                Text(line.source).textSelection(.enabled)
+                Label {
+                    Text(line.translation ?? "Please repeat this piece.").foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: "questionmark.circle").foregroundStyle(.orange)
                 }
                 .font(.callout)
+            case nil:
+                if let translation = line.translation {
+                    Text(translation).font(.title3.weight(.medium)).textSelection(.enabled)
+                    Text(line.source).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                } else {
+                    Text(line.source).textSelection(.enabled)
+                    Text(isLive ? "Interpreting…" : "Session ended before translation")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if line.brief {
+                    Text("Shortened to catch up").font(.caption).foregroundStyle(.secondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .panel(tint: line.silence == nil || line.silence == .unclear ? tint : nil)
     }
 }
 
 struct LanguageMenu: View {
     @Binding var languages: [String]
     let disabled: Bool
-
-    static let all: [(code: String, name: String)] =
-        Languages.names.map { (code: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
-
-    private var any: Bool { !languages.contains { $0 != "en" } }
-
-    private func binding(_ code: String) -> Binding<Bool> {
-        Binding(get: { languages.contains(code) },
-                set: { on in
-                    if on {
-                        languages.append(code)
-                    } else if code != "en" {
-                        languages.removeAll { $0 == code }
-                    }
-                })
+    static let all = Languages.names.map { (code: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
+    private var selected: [String] { languages.filter { $0 != "en" } }
+    private var any: Bool { selected.isEmpty }
+    private var summary: String {
+        if any { return "Any language" }
+        if selected.count > 2 { return "\(selected.count) languages" }
+        return Languages.list(selected)
     }
-
+    private func binding(_ code: String) -> Binding<Bool> {
+        Binding(get: { languages.contains(code) }, set: { on in
+            if on && !languages.contains(code) { languages.append(code) }
+            else if !on { languages.removeAll { $0 == code } }
+        })
+    }
     var body: some View {
         Menu {
-            Button {
-                languages = ["en"]
-            } label: {
+            Button { languages = ["en"] } label: {
                 if any { Label("Any language", systemImage: "checkmark") } else { Text("Any language") }
             }
-            Section("Only these") {
+            Section("Only these languages") {
                 ForEach(Self.all.filter { $0.code != "en" }, id: \.code) { language in
                     Toggle(language.name, isOn: binding(language.code))
                 }
             }
         } label: {
-            Text(Languages.list(languages.filter { $0 != "en" }).ifEmpty("Any language") + " → English")
+            HStack(spacing: 6) {
+                Image(systemName: "globe")
+                Text(summary + " → English").lineLimit(2)
+            }
+            .font(.callout.weight(.medium))
+            .frame(minHeight: 44, alignment: .leading)
         }
-        #if os(macOS)
         .menuStyle(.borderlessButton)
+        #if os(macOS)
         .fixedSize()
-        #else
-        .lineLimit(1)
         #endif
         .disabled(disabled)
-        .help("Any language by default. Name the languages spoken here to treat anything else as misheard.")
+        .help("Choose the languages spoken here. Other languages are skipped.")
+        .accessibilityLabel("Spoken languages")
+        .accessibilityValue(any ? "Any language into English" : Languages.list(selected) + " into English")
     }
 }
 
@@ -274,33 +380,31 @@ struct DevicePicker: View {
     let title: String
     let input: Bool
     @Binding var selection: String?
-
     var body: some View {
-        Picker(title, selection: $selection) {
-            Text("System").tag(String?.none)
-            ForEach(AudioDevices.all().filter { input ? $0.isInput : $0.isOutput }) { device in
-                Text(device.name).tag(Optional(device.name))
+        VStack(alignment: .leading, spacing: 5) {
+            Label(title, systemImage: input ? "mic" : "headphones").font(.caption).foregroundStyle(.secondary)
+            Picker(title, selection: $selection) {
+                Text("System default").tag(String?.none)
+                ForEach(AudioDevices.all().filter { input ? $0.isInput : $0.isOutput }) { device in
+                    Text(device.name).tag(Optional(device.name))
+                }
             }
+            .labelsHidden().controlSize(.regular).accessibilityLabel(title)
         }
-        .controlSize(.small).fixedSize()
+        .frame(maxWidth: .infinity)
     }
 }
 #endif
 
 struct LevelMeter: View {
     let level: Float
-
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.secondary.opacity(0.2))
-                Capsule().fill(Color.green.opacity(0.8))
+                Capsule().fill(Color.secondary.opacity(0.15))
+                Capsule().fill(Color.accentColor)
                     .frame(width: geometry.size.width * CGFloat(min(1, sqrt(Double(level)) * 3)))
             }
         }
     }
-}
-
-extension String {
-    func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
 }

@@ -10,6 +10,7 @@ struct InterpreterApp: App {
         WindowGroup("Interpreter") {
             InterpreterWindow(session: session)
         }
+        .defaultSize(width: 780, height: 720)
         .windowResizability(.contentMinSize)
     }
 }
@@ -20,7 +21,7 @@ private struct InterpreterWindow: View {
 
     var body: some View {
         ContentView(session: session)
-            .frame(minWidth: 480, minHeight: 560)
+            .frame(minWidth: 520, minHeight: 560)
             .onAppear { session.windowOpened(id) }
             .onDisappear { session.windowClosed(id) }
             .task { await session.prepare() }

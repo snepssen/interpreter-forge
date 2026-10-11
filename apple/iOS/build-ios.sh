@@ -27,7 +27,7 @@ xcodegen generate --quiet
 APP="$IOS/.build/Build/Products/Release-iphoneos/Interpreter.app"
 rm -rf "$APP"
 build_app() {
-  xcodebuild -project Interpreter.xcodeproj -scheme Interpreter -configuration Release \
+  xcodebuild -project Interpreter.xcodeproj -scheme InterpreterPhone -configuration Release \
     -destination 'generic/platform=iOS' -derivedDataPath "$IOS/.build" \
     -allowProvisioningUpdates -skipMacroValidation -skipPackagePluginValidation "$@"
 }
