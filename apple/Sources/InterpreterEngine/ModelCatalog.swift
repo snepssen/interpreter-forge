@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Not everyone needs the same one: a phone with 8 GB runs a 4B model with
 /// little to spare, and a smaller one runs smoother between steps. Measured
-/// with scripts/compare-models.py on 26 lines across 13 languages and the
+/// with scripts/compare-models.py on 26 lines across ten languages and the
 /// complete-thought judge's 17 cases, and with tcrun on 8 minutes of fast
 /// Polish and Hungarian conversation: median lag 4.4 s with Qwen, 6.7 s with
 /// TranslateGemma, which has no judge and so cuts later.

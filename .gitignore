@@ -16,3 +16,5 @@ apple/iOS/Resources/
 apple/iOS/Interpreter.xcodeproj/
 apple/iOS/.build/
 apple/iOS/App/Info.plist
+docs/__pycache__/
+.claude/

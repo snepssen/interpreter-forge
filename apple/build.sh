@@ -54,6 +54,7 @@ done < <(find "$PRODUCTS" -maxdepth 1 -name '*.bundle')
 cp "$VOICEFORGE/$VOICE.onnx" "$VOICEFORGE/$VOICE.onnx.json" "$APP/Contents/Resources/"
 cp -R "$VOICEFORGE/espeak-ng-data" "$APP/Contents/Resources/"
 cp "$VAD" "$APP/Contents/Resources/"
+cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"  # scripts/make-icon.py
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -61,6 +62,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key><string>Interpreter</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIdentifier</key><string>local.translate-core.interpreter</string>
   <key>CFBundleName</key><string>Interpreter</string>
   <key>CFBundlePackageType</key><string>APPL</string>
