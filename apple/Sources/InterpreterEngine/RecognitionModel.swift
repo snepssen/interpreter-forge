@@ -1,0 +1,31 @@
+import Foundation
+import InterpreterCore
+import WhisperKit
+
+/// Recognition is independent of the translation model. Only one is loaded.
+public enum RecognitionModel: String, CaseIterable, Identifiable, Sendable {
+    case parakeetUltra = "parakeet-ultra"
+    case whisper = "whisper-large-v3-v20240930-626mb"
+
+    public var id: String { rawValue }
+    public var name: String { self == .parakeetUltra ? "Parakeet Ultra" : "Whisper large-v3 Turbo" }
+    public static let whisperVariant = "large-v3-v20240930_626MB"
+    public var download: Int64 { self == .parakeetUltra ? 630_000_000 : 626_000_000 }
+    public var summary: String {
+        self == .parakeetUltra
+            ? "Fast recognition in 25 European languages. Updated Parakeet weights; runs on the Neural Engine."
+            : "Broader language coverage, including Dutch, Romanian and Hungarian. May add delay and use more memory during live translation."
+    }
+    public var languageNames: [String: String] {
+        if self == .parakeetUltra { return Languages.names }
+        let locale = Locale(identifier: "en")
+        return Dictionary(uniqueKeysWithValues: Constants.languageCodes.sorted().map { code in
+            (code, Languages.names[code] ?? locale.localizedString(forLanguageCode: code)
+                ?? Constants.languages.keys.sorted().first { Constants.languages[$0] == code }!.capitalized)
+        })
+    }
+    public func supportedFilter(_ codes: [String]) -> [String] {
+        let supported = codes.filter { languageNames[$0] != nil }
+        return supported.contains("en") ? supported : ["en"] + supported
+    }
+}

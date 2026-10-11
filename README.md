@@ -35,7 +35,13 @@ iPhone on the table through Continuity hears the room better than AirPods)
 and the output from the top bar. Use **Transcript options** to show or hide
 English context or clear a stopped conversation. Translations appear in cards,
 with the original speech underneath and a delay label. The first launch downloads Parakeet (a few
-hundred MB).
+hundred MB). Native Mac and iPhone apps now use **Parakeet Ultra** by default.
+In **Models → Speech recognition**, choose **Whisper large-v3 Turbo** to try
+Argmax's recommended `large-v3-v20240930_626MB` variant instead. Recognition
+selection is remembered, and only one recognizer is loaded at a time.
+Whisper exposes 100 recognition languages; Parakeet Ultra exposes 25. This
+does not make every language equally accurate, or expand TranslateGemma's
+55-language translation coverage. See [recognition options](docs/recognition-options.md).
 
 You choose the translation model: a picker on first launch, and a model
 manager (the gear) to download, switch or delete them later, since not
@@ -86,7 +92,12 @@ See [the code review](docs/code-review-2026-10-11.md) for engine fixes and
 verification, and [the UI notes](docs/ui-polish-2026-10-11.md) for the shared
 Mac/iPhone interface changes.
 
-Speech recognition models use FluidAudio's Application Support directory.
+Parakeet models use FluidAudio's Application Support directory. Ultra is a
+different set of weights from v3, so updating to it downloads about 630 MB
+once; the old v3 cache is retained. Whisper has a separate app-owned cache,
+excluded from iCloud backup, with a completion record checked before loading.
+After its models and tokenizer have loaded successfully, cached launches
+skip the model downloader. An interrupted download cannot mark the cache complete.
 The installer has no uninstall step. An in-place update was checked on the
 phone: all 35 recognition-file entries retained their paths, sizes and
 modification dates, and the user confirmed Ready without another download.
@@ -103,6 +114,10 @@ session. Then test a session offline to confirm the models are reusable.
 | translation | Qwen3-4B, MLX | the same model, MLX Swift, ~1 s |
 | voice | Piper (onnxruntime) | voice-forge's phonemizer, Piper on ONNX Runtime |
 | scheduling | translation first: one GPU | side by side: ASR on the Neural Engine, translation on the GPU |
+
+The timings above were measured with the previous Parakeet v3 recognizer;
+they are not a benchmark of Ultra or Whisper. The Python comparison engine
+continues to use v3.
 
 `InterpreterCore` is the Python logic ported (segmenter, clock times, language
 evidence, echoes, catch-up); `tccheck` asks every Python test again and gets

@@ -17,9 +17,10 @@ var args = Array(CommandLine.arguments.dropFirst())
 }
 let languages = (option("--languages") ?? "en").split(separator: ",").map(String.init)
 let modelID = option("--model") ?? ModelCatalog.recommended.id
+let recognitionID = option("--recognition") ?? RecognitionModel.parakeetUltra.rawValue
 let outOption = option("--out")
 guard let input = args.first else {
-    print("usage: tcrun <audio> [--languages en,pl,hu,nl] [--out dir]")
+    print("usage: tcrun <audio> [--recognition parakeet-ultra|whisper-large-v3-v20240930-626mb] [--languages en,pl,hu,nl] [--out dir]")
     exit(2)
 }
 let inputURL = URL(fileURLWithPath: input)
@@ -35,8 +36,14 @@ guard let model = ModelCatalog.model(modelID), let modelURL = ModelStore.locatio
     exit(1)
 }
 info("loading")
-let recognizer = try await Recognizer.load(languages: languages)
+guard let recognition = RecognitionModel(rawValue: recognitionID) else {
+    info("unknown recognition model: \(recognitionID)")
+    exit(2)
+}
+let recognizer = try await Recognizer.load(model: recognition, languages: languages)
+info("recognising with \(recognition.name)")
 let linguist = try await Linguist(model: model, at: modelURL, languages: languages)
+await linguist.setRecognitionModel(recognition)
 info("translating with \(model.name)" + (model.judges ? "" : ", cutting without a judge"))
 let voice = try Voice(model: voiceURL, espeakData: espeak)
 try await linguist.warmUp()

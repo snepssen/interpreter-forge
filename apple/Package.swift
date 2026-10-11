@@ -11,6 +11,7 @@ let package = Package(
         .library(name: "InterpreterUI", targets: ["InterpreterUI"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/argmaxinc/argmax-oss-swift.git", exact: "1.1.1"),
         .package(url: "https://github.com/FluidInference/FluidAudio.git", from: "0.17.7"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.32.3"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.5"),
@@ -20,6 +21,7 @@ let package = Package(
     targets: [
         .testTarget(name: "InterpreterEngineTests", dependencies: [
             "InterpreterEngine", "InterpreterCore",
+            .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
         ]),
         // Everything that can be decided without a model: the segmenter, clock
@@ -37,6 +39,7 @@ let package = Package(
         // the translation model (MLX), the voice (Piper on ONNX).
         .target(name: "InterpreterEngine", dependencies: [
             "InterpreterCore", "CEspeakNG", "ObjCExceptions",
+            .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "FluidAudio", package: "FluidAudio"),
             .product(name: "MLXLLM", package: "mlx-swift-lm"),
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),

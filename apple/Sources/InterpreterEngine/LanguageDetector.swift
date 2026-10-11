@@ -20,9 +20,11 @@ public struct LanguageDetector: Sendable {
 
     public init() {}
 
-    public func guess(_ text: String) -> Guess? {
+    public func guess(_ text: String, languages: [String]? = nil) -> Guess? {
         let recogniser = NLLanguageRecognizer()
-        recogniser.languageConstraints = Self.candidates
+        recogniser.languageConstraints = languages.map { codes in
+            codes.map { NLLanguage(rawValue: $0 == "no" ? "nb" : $0) }
+        } ?? Self.candidates
         recogniser.processString(text)
         guard let (language, confidence) = recogniser.languageHypotheses(withMaximum: 1).first else { return nil }
         let code = language == .norwegian ? "no" : language.rawValue  // Bokmål reports "nb"

@@ -65,7 +65,8 @@ public struct ContentView: View {
                 .accessibilityLabel("Models")
             }
             HStack(spacing: 12) {
-                LanguageMenu(languages: $session.languages, disabled: session.isLive || session.isBusy)
+                LanguageMenu(languages: $session.languages, names: session.availableLanguages,
+                             disabled: session.isLive || session.isBusy)
                 Spacer(minLength: 0)
                 SessionStatus(phase: session.phase)
             }
@@ -167,7 +168,7 @@ public struct ContentView: View {
 
     private var readyDescription: String {
         if session.anyLanguage { return "Press Live to hear the conversation in English. Headphones work best." }
-        return "Press Live to interpret \(Languages.list(session.languages.filter { $0 != "en" })) into English. Other languages are skipped."
+        return "Press Live to interpret \(session.languageList(session.languages.filter { $0 != "en" })) into English. Other languages are skipped."
     }
 
     private func statusPanel<Actions: View>(title: String, detail: String, symbol: String,
@@ -331,14 +332,17 @@ struct LineView: View {
 
 struct LanguageMenu: View {
     @Binding var languages: [String]
+    let names: [String: String]
     let disabled: Bool
-    static let all = Languages.names.map { (code: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
+    private var all: [(code: String, name: String)] {
+        names.map { (code: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
+    }
     private var selected: [String] { languages.filter { $0 != "en" } }
     private var any: Bool { selected.isEmpty }
     private var summary: String {
         if any { return "Any language" }
         if selected.count > 2 { return "\(selected.count) languages" }
-        return Languages.list(selected)
+        return Languages.list(selected, names: names)
     }
     private func binding(_ code: String) -> Binding<Bool> {
         Binding(get: { languages.contains(code) }, set: { on in
@@ -352,7 +356,7 @@ struct LanguageMenu: View {
                 if any { Label("Any language", systemImage: "checkmark") } else { Text("Any language") }
             }
             Section("Only these languages") {
-                ForEach(Self.all.filter { $0.code != "en" }, id: \.code) { language in
+                ForEach(all.filter { $0.code != "en" }, id: \.code) { language in
                     Toggle(language.name, isOn: binding(language.code))
                 }
             }
@@ -371,7 +375,7 @@ struct LanguageMenu: View {
         .disabled(disabled)
         .help("Choose the languages spoken here. Other languages are skipped.")
         .accessibilityLabel("Spoken languages")
-        .accessibilityValue(any ? "Any language into English" : Languages.list(selected) + " into English")
+        .accessibilityValue(any ? "Any supported language into English" : Languages.list(selected, names: names) + " into English")
     }
 }
 

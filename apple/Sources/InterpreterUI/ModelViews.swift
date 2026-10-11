@@ -37,16 +37,13 @@ public struct ModelManager: View {
                         ModelRow(session: session, model: model)
                     }
                     Text("Speech recognition").font(.title3.bold()).padding(.top, 12)
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label("Parakeet v3", systemImage: "waveform").font(.headline)
-                        Text("25 European languages").font(.callout).foregroundStyle(.secondary)
-                        Text(ModelStore.recognitionSize().map { gigabytes($0) + " stored on this device" } ?? "Downloads when needed")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Text("Languages outside the supported set may be recognised poorly.")
-                            .font(.callout).foregroundStyle(.secondary)
+                    Text("Choose how speech is recognised. Switching downloads the model if needed; one recognizer is loaded at a time.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    ForEach(RecognitionModel.allCases) { model in
+                        RecognitionRow(session: session, model: model)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .panel()
+                    Text("Recognition coverage and translation coverage differ. TranslateGemma supports 55 languages; recognition quality varies by language and recording.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 .padding(20)
                 .frame(maxWidth: 680)
@@ -66,6 +63,47 @@ public struct ModelManager: View {
         #else
         .presentationDragIndicator(.visible)
         #endif
+    }
+}
+
+struct RecognitionRow: View {
+    let session: LiveSession
+    let model: RecognitionModel
+
+    var body: some View {
+        let selected = session.recognitionModel == model
+        VStack(alignment: .leading, spacing: 12) {
+            Label(model.name, systemImage: "waveform").font(.headline)
+            HStack {
+                if selected { Badge("Selected", tint: .green) }
+                if model == .parakeetUltra { Badge("Fast") }
+            }
+            Text("\(model.languageNames.count) languages · about \(gigabytes(model.download)) download")
+                .font(.caption).foregroundStyle(.secondary)
+            Text(model.summary).font(.callout).foregroundStyle(.secondary)
+            if model == .whisper {
+                Text("Recommended model: \(RecognitionModel.whisperVariant)")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text("First setup may take a few minutes. Keep the app open while it prepares the model.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            if let bytes = ModelStore.recognitionSize(model) {
+                Text(gigabytes(bytes) + " stored on this device").font(.caption).foregroundStyle(.secondary)
+            }
+            if selected, session.isBusy {
+                ProgressView().accessibilityLabel("Preparing \(model.name)")
+                if case .loading(let status) = session.phase {
+                    Text(status).font(.caption).foregroundStyle(.secondary)
+                }
+            } else if !selected {
+                Button { Task { await session.useRecognition(model) } } label: {
+                    Label("Use \(model.name)", systemImage: "checkmark.circle").frame(minHeight: 28)
+                }
+                .buttonStyle(.borderedProminent).disabled(session.isLive || session.isBusy)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .panel(tint: selected ? .accentColor : nil)
     }
 }
 

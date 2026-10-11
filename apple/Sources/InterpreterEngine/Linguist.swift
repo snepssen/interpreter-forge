@@ -37,6 +37,7 @@ public actor Linguist {
     private let no: [Int32]
     private let stops: Set<Int>
     private let detector = LanguageDetector()
+    private var detectionLanguages: [String]?
     /// The last language named with confidence: a conversation rarely switches
     /// mid-thought, and two-word replies are where the detector is unsure.
     private var lastLanguage: String?
@@ -44,9 +45,9 @@ public actor Linguist {
     public init(model: TranslationModel, at directory: URL, languages: [String]) async throws {
         // Variable shapes otherwise grow MLX's cache without bound; a phone has less to spare.
         #if os(iOS)
-        MLX.GPU.set(cacheLimit: 256 << 20)
+        MLX.Memory.cacheLimit = 256 << 20
         #else
-        MLX.GPU.set(cacheLimit: 1 << 30)
+        MLX.Memory.cacheLimit = 1 << 30
         #endif
         let context = try await loadModel(from: directory, using: #huggingFaceTokenizerLoader())
         yes = Self.firstTokens(context.tokenizer, ["yes", "Yes", " yes", " Yes"])
@@ -68,9 +69,14 @@ public actor Linguist {
         system = Self.system(for: languages)
     }
 
+    public func setRecognitionModel(_ model: RecognitionModel) {
+        detectionLanguages = model == .whisper ? model.languageNames.keys.sorted() : nil
+    }
+
     private static func system(for languages: [String]) -> String {
         let spoken = languages.filter { $0 != "en" }
-        return Prompts.translate + (spoken.isEmpty ? "" : Prompts.speakers(Languages.list(spoken)))
+        return Prompts.translate + (spoken.isEmpty ? "" : Prompts.speakers(
+            Languages.list(spoken, names: RecognitionModel.whisper.languageNames)))
     }
 
     /// The first token of each spelling; the model's answer starts with one of them.
@@ -163,7 +169,7 @@ public actor Linguist {
     /// The language to translate from: the detector's answer when it is sure,
     /// else the last one it was sure of, else its best guess.
     private func source(of text: String) -> String {
-        let guess = detector.guess(text)
+        let guess = detector.guess(text, languages: detectionLanguages)
         if let guess, guess.confidence >= 0.8, guess.code != "en" {
             lastLanguage = guess.code
             return guess.code
@@ -205,7 +211,7 @@ public actor Linguist {
     /// understands; a language not spoken here (if restricted) is misheard.
     /// The text's own signs come first, then Apple's language detector.
     public func gate(_ text: String) -> Silence? {
-        let guess = detector.guess(text)
+        let guess = detector.guess(text, languages: detectionLanguages)
         let foreign = text.filter { $0.isLetter && !$0.isASCII }.count
         if foreign < 2, let guess, guess.code == "en", guess.confidence >= 0.6 { return .english }
         guard languages.contains(where: { $0 != "en" }) else { return nil }

@@ -30,7 +30,7 @@ public enum Languages {
     ]
 
     /// "Polish, Hungarian and Dutch" for ["pl", "hu", "nl"].
-    public static func list(_ codes: [String]) -> String {
+    public static func list(_ codes: [String], names: [String: String] = names) -> String {
         let words = codes.compactMap { names[$0] }
         guard words.count > 1 else { return words.first ?? "" }
         return words.dropLast().joined(separator: ", ") + " and " + words[words.count - 1]
@@ -39,6 +39,9 @@ public enum Languages {
     /// What the text itself says about being in one of `codes`: true, false, or
     /// nil when it doesn't say and the model has to be asked.
     public static func evidence(_ text: String, _ codes: [String]) -> Bool? {
+        // These heuristics were calibrated for Parakeet's European set. Other
+        // scripts/languages supported by Whisper go through the detector.
+        guard codes.allSatisfy({ names[$0] != nil }) else { return nil }
         let expectedScripts = Set(codes.map { scripts[$0] ?? "LATIN" })
         let lower = text.lowercased()
         let found = lower.filter(\.isLetter)

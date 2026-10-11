@@ -56,6 +56,12 @@ public final class LiveSession {
     /// The translation model in use, chosen in the picker or the manager; remembered.
     public private(set) var translationModel: TranslationModel? =
         ModelCatalog.model(UserDefaults.standard.string(forKey: "translationModel"))
+    public private(set) var recognitionModel =
+        RecognitionModel(rawValue: UserDefaults.standard.string(forKey: "recognitionModel") ?? "") ?? .parakeetUltra
+    public var availableLanguages: [String: String] { recognitionModel.languageNames }
+    public func languageList(_ codes: [String]) -> String {
+        Languages.list(codes, names: availableLanguages)
+    }
     /// Downloads under way, by model id, from 0 to 1.
     public private(set) var downloads: [String: Double] = [:]
     /// Bumped when models come or go, so views listing them look again.
@@ -88,7 +94,7 @@ public final class LiveSession {
 
     public var isLive: Bool { phase == .live }
 
-    /// Load the three models; the first run downloads Parakeet (a few hundred MB).
+    /// Load recognition, translation and voice; download recognition if needed.
     public func prepare() async {
         let generation = self.generation
         await shutdownTask?.value
@@ -117,7 +123,7 @@ public final class LiveSession {
             }
             if recognizer == nil {
                 phase = .loading("Loading speech recognition…")
-                recognizer = try await Recognizer.load(languages: languages) { fraction in
+                let loaded = try await Recognizer.load(model: recognitionModel, languages: languages) { fraction in
                     Task { @MainActor in
                         if self.active, self.preparationID == preparation, self.recognizer == nil, case .loading = self.phase {
                             self.phase = .loading(fraction < 1
@@ -126,6 +132,8 @@ public final class LiveSession {
                         }
                     }
                 }
+                try Task.checkCancellation()
+                recognizer = loaded
             }
             try Task.checkCancellation()
             if linguist?.model != model {
@@ -143,6 +151,7 @@ public final class LiveSession {
             try await linguist?.warmUp()
             await recognizer?.setLanguages(languages)
             await linguist?.setLanguages(languages)
+            await linguist?.setRecognitionModel(recognitionModel)
             try Task.checkCancellation()
             storeChanges += 1
             phase = .ready
@@ -212,6 +221,23 @@ public final class LiveSession {
     }
 
     // MARK: models
+
+    /// Switch only while stopped. Release the old recognizer before downloading
+    /// or loading another; no silent fallback when the chosen model fails.
+    public func useRecognition(_ model: RecognitionModel) async {
+        guard !isLive, !isBusy else { return }
+        guard model != recognitionModel || recognizer == nil else { return }
+        recognitionModel = model
+        UserDefaults.standard.set(model.rawValue, forKey: "recognitionModel")
+        recognizer = nil
+        let supported = model.supportedFilter(languages)
+        if supported != languages {
+            languages = supported
+            notice = "The language filter now contains only languages supported by \(model.name)."
+        }
+        phase = .idle
+        await prepare()
+    }
 
     /// Fetch a model; progress shows in `downloads`. Use it straight away if
     /// none is in use yet.

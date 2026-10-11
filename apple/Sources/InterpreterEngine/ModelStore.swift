@@ -76,12 +76,8 @@ public enum ModelStore {
     }
 
     /// Parakeet's folder in FluidAudio's cache, if it has been downloaded.
-    public static func recognitionSize() -> Int64? {
-        let folder = AsrModels.defaultCacheDirectory(for: .v3)
-        guard let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.fileSizeKey]) else { return nil }
-        let total = files.compactMap { ($0 as? URL).flatMap { try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize } }
-            .reduce(0, +)
-        return total > 0 ? Int64(total) : nil
+    public static func recognitionSize(_ model: RecognitionModel = .parakeetUltra) -> Int64? {
+        RecognitionStore.size(of: model)
     }
 
     static func fileSize(_ url: URL) -> Int64? {
