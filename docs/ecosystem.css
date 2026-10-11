@@ -53,6 +53,7 @@ body[data-project="translate-core"] { --eco-current: var(--eco-interpreter); }
     --eco-preflight: #387614;
     --eco-siphon: #1f5fbf;
     --eco-interpreter: #00687f;
+    --eco-autosort: #b52b9a;
   }
 }
 :root[data-theme="light"] {
@@ -63,6 +64,7 @@ body[data-project="translate-core"] { --eco-current: var(--eco-interpreter); }
   --eco-preflight: #387614;
   --eco-siphon: #1f5fbf;
   --eco-interpreter: #00687f;
+  --eco-autosort: #b52b9a;
 }
 
 /* Wide diagrams and code samples own their scrolling inside their existing
