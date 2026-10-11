@@ -267,11 +267,43 @@ public final class Speaker: @unchecked Sendable {
 }
 
 #if os(iOS)
-/// The phone's own microphone hears the room; AirPods, if connected, are only
-/// for listening, over A2DP, so they stay in full quality rather than drop to
-/// call quality. Without headphones the interpreter speaks from the speaker,
-/// and since what it says is English, the gate keeps the echo quiet.
+/// By default the phone's own microphone hears the room and AirPods, if
+/// connected, are only for listening, over A2DP, in full quality. Without
+/// headphones the interpreter speaks from the speaker, and since what it says
+/// is English, the gate keeps the echo quiet.
+///
+/// The headphones' microphone is closer to the people talking. Bluetooth input
+/// used to mean call quality both ways (HFP); since iOS 26 AirPods can record
+/// at full bandwidth, and since 26.2 hear the room ("far field") rather than
+/// only the wearer, whose own speech is English and skipped anyway.
 public enum PhoneAudio {
+    /// Which microphone; the raw value is what LiveSession remembers.
+    public enum Input: String, CaseIterable, Sendable {
+        case phone = "iphone"
+        case headphonesRoom = "headphones"
+        case headphonesWearer = "headphones-wearer"
+
+        public init(_ stored: String?) { self = stored.flatMap(Input.init(rawValue:)) ?? .phone }
+        var usesHeadphones: Bool { self != .phone }
+    }
+
+    /// What the session actually got, for the settings screen: the requests
+    /// above are preferences the route may not support.
+    public static var inputDescription: String {
+        let session = AVAudioSession.sharedInstance()
+        guard let port = session.currentRoute.inputs.first else { return "No microphone" }
+        var parts = [port.portType == .builtInMic ? "iPhone microphone" : port.portName]
+        if #available(iOS 26.0, *), let bluetooth = port.bluetoothMicrophoneExtension {
+            parts.append(bluetooth.highQualityRecording.isEnabled ? "full quality" : "call quality")
+            parts.append(bluetooth.farFieldCapture.isEnabled ? "whole room" : "mainly the wearer")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    static var inputIsHeadphones: Bool {
+        AVAudioSession.sharedInstance().currentRoute.inputs.contains { $0.portType != .builtInMic }
+    }
+
     static var routeState: AudioRouteState {
         let session = AVAudioSession.sharedInstance()
         return AudioRouteState(inputs: session.currentRoute.inputs.map(\.uid).sorted(),
@@ -281,11 +313,32 @@ public enum PhoneAudio {
                                outputChannels: session.outputNumberOfChannels)
     }
 
-    public static func activate() throws {
+    public static func activate(_ input: Input = .phone) throws {
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .defaultToSpeaker])
-        if let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
-            try session.setPreferredInput(builtIn)
+        if input.usesHeadphones {
+            // Richest first; each option is a preference the route may refuse,
+            // and an unsupported combination is an error, not a fallback.
+            var attempts: [AVAudioSession.CategoryOptions] = []
+            if #available(iOS 26.2, *), input == .headphonesRoom {
+                attempts.append([.allowBluetoothHFP, .bluetoothHighQualityRecording, .farFieldInput, .defaultToSpeaker])
+            }
+            if #available(iOS 26.0, *) {
+                attempts.append([.allowBluetoothHFP, .bluetoothHighQualityRecording, .defaultToSpeaker])
+            }
+            attempts.append([.allowBluetoothHFP, .defaultToSpeaker])
+            var chosen = false
+            for options in attempts where !chosen {
+                chosen = (try? session.setCategory(.playAndRecord, mode: .default, options: options)) != nil
+            }
+            if !chosen { try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothHFP, .defaultToSpeaker]) }
+            if let headset = session.availableInputs?.first(where: { $0.portType == .bluetoothHFP }) {
+                try session.setPreferredInput(headset)
+            }
+        } else {
+            try session.setCategory(.playAndRecord, mode: .default, options: [.allowBluetoothA2DP, .defaultToSpeaker])
+            if let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+                try session.setPreferredInput(builtIn)
+            }
         }
         try session.setActive(true)
     }

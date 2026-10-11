@@ -100,7 +100,7 @@ public final class Pipeline: @unchecked Sendable {
     public func start(microphone device: String?, speaker output: String?,
                       events: @escaping @Sendable (PipelineEvent) -> Void) throws {
         #if os(iOS)
-        try PhoneAudio.activate()
+        try PhoneAudio.activate(PhoneAudio.Input(device))
         #endif
         do {
             #if os(iOS)

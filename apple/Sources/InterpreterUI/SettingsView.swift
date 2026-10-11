@@ -10,6 +10,13 @@ public struct SettingsView: View {
 
     public init(session: LiveSession) { self.session = session }
 
+    #if os(iOS)
+    private var microphone: Binding<PhoneAudio.Input> {
+        Binding(get: { PhoneAudio.Input(session.microphone) },
+                set: { session.microphone = $0 == .phone ? nil : $0.rawValue })
+    }
+    #endif
+
     public var body: some View {
         NavigationStack {
             Form {
@@ -30,6 +37,24 @@ public struct SettingsView: View {
                 } header: {
                     Text("Speech recognition")
                 }
+
+                #if os(iOS)
+                Section {
+                    Picker("Microphone", selection: microphone) {
+                        Text("iPhone").tag(PhoneAudio.Input.phone)
+                        Text("Headphones, whole room").tag(PhoneAudio.Input.headphonesRoom)
+                        Text("Headphones, your voice").tag(PhoneAudio.Input.headphonesWearer)
+                    }
+                    .disabled(session.isLive || session.isBusy)
+                    if let used = session.inputDescription {
+                        LabeledContent("Last used", value: used)
+                    }
+                } header: {
+                    Text("Microphone")
+                } footer: {
+                    Text("Headphone microphones sit closer to the people talking. AirPods that support it record in full quality; others switch to call quality, and the English then sounds like a phone call. Whole room asks them to hear everyone, not mainly you.")
+                }
+                #endif
 
                 Section {
                     Slider(value: $session.voiceVolume, in: 0...1) {

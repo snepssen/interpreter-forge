@@ -93,9 +93,16 @@ public final class LiveSession {
         pipeline?.speaker?.volume = captionsOnly ? 0 : Float(voiceVolume)
     }
 
-    /// Device names (or part of them); nil for the system's.
-    public var microphone: String?
-    public var speaker: String?
+    /// Device names (or part of them); nil for the system's. On the iPhone the
+    /// microphone is a PhoneAudio.Input. Remembered.
+    public var microphone: String? = UserDefaults.standard.string(forKey: "microphone") {
+        didSet { UserDefaults.standard.set(microphone, forKey: "microphone") }
+    }
+    public var speaker: String? = UserDefaults.standard.string(forKey: "speaker") {
+        didSet { UserDefaults.standard.set(speaker, forKey: "speaker") }
+    }
+    /// The microphone the last session actually used, and in what mode.
+    public private(set) var inputDescription: String?
 
     private var recognizer: Recognizer?
     private var linguist: Linguist?
@@ -228,6 +235,12 @@ public final class LiveSession {
             }
         }
         notice = nil
+        #if os(iOS)
+        inputDescription = PhoneAudio.inputDescription
+        if PhoneAudio.Input(microphone).usesHeadphones && !PhoneAudio.inputIsHeadphones {
+            notice = "No headphone microphone is connected, so the iPhone's is listening."
+        }
+        #endif
         phase = .live
         observeAudioChanges()
         meter = Task { [weak self] in
