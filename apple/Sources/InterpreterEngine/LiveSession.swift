@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import InterpreterCore
 import Observation
+import VoiceCore
 
 /// Everything the app shows and controls, on the main actor. The Mac app and,
 /// later, the iPhone app are views of this.

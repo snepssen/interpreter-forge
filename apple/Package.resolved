@@ -1,5 +1,5 @@
 {
-  "originHash" : "b5ea2e93af8204683e5f97aa52d36b5fbb0bceeaf4a917e838cb7f168854b69f",
+  "originHash" : "7eb6cba80b830f7a8563580bf3b3b2beaa7f7d9f9251565b2caf5f21e017f067",
   "pins" : [
     {
       "identity" : "argmax-oss-swift",
@@ -134,6 +134,15 @@
       "state" : {
         "revision" : "48473106a93b2d8dfb114b82f0628ebbb71734e7",
         "version" : "1.3.5"
+      }
+    },
+    {
+      "identity" : "voice-core",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/snepssen/voice-core",
+      "state" : {
+        "revision" : "fdca84e8f742a9136523d2ffc9416478ed51bac5",
+        "version" : "1.0.1"
       }
     },
     {

@@ -1,4 +1,5 @@
 import Foundation
+import VoiceCore
 
 /// Where the models and data live: in the app bundle when built by build.sh,
 /// otherwise in this checkout and in voice-forge and voice-polyglot beside it,
@@ -39,9 +40,9 @@ public enum Resources {
               voiceForge.appending(path: "cross-platform/resources/voices/\(voiceName)"))
     }
 
-    public static var espeakData: URL? {
-        first(bundled("espeak-ng-data"), voiceForge.appending(path: "macos/Sources/VoiceForgeTTS/Resources/espeak-ng-data"))
-    }
+    /// voice-core's, the data every snepssen voice was trained with, from its
+    /// resource bundle.
+    public static var espeakData: URL? { EspeakData.directory }
 
     public static var vad: URL? { first(bundled("silero_vad.onnx"), checkout.appending(path: "models/silero_vad.onnx")) }
 

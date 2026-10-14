@@ -24,9 +24,6 @@ targets:
         buildPhase: resources
       - path: Resources/silero_vad.onnx
         buildPhase: resources
-      - path: Resources/espeak-ng-data
-        type: folder
-        buildPhase: resources
     dependencies:
       - package: InterpreterPackage
         product: InterpreterUI

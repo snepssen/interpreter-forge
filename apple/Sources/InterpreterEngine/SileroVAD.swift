@@ -1,5 +1,6 @@
 import Foundation
 import OnnxRuntimeBindings
+import VoiceCore
 
 /// Silero VAD v5 on 32 ms frames, with hysteresis on its speech probability.
 /// The same model and the same handling as `vad.py`: each frame goes in with
@@ -18,7 +19,7 @@ public final class SileroVAD: @unchecked Sendable {
     private nonisolated(unsafe) static let env = try? ORTEnv(loggingLevel: .warning)
 
     public init(model: URL, on: Float = 0.5, off: Float = 0.35) throws {
-        guard let env = Self.env else { throw Voice.Failure.noRuntime }
+        guard let env = Self.env else { throw PiperModel.Failure.noRuntime }
         let options = try ORTSessionOptions()
         try options.setIntraOpNumThreads(1)
         session = try ORTSession(env: env, modelPath: model.path, sessionOptions: options)

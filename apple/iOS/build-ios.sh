@@ -4,15 +4,14 @@
 #   iOS/build-ios.sh            # build, install on the first connected iPhone
 #   iOS/build-ios.sh --no-install
 #
-# The voice is voice-polyglot's newest export (scripts/polyglot-voice.sh) and
-# espeak-ng data comes from voice-forge, both beside translate-core; the
-# VAD model from models/. The translation model is not bundled: the app fetches
+# The voice is voice-polyglot's newest export or release
+# (scripts/polyglot-voice.sh); espeak-ng and its data come with the voice-core
+# package, in its resource bundle; the VAD model from models/. The translation model is not bundled: the app fetches
 # it on first launch (2.3 GB, best on Wi-Fi).
 set -euo pipefail
 cd "$(dirname "$0")"
 IOS="$(pwd)"
 REPO="$(cd ../.. && pwd)"
-VOICEFORGE="$(dirname "$REPO")/voice-forge/macos/Sources/VoiceForgeTTS/Resources"
 VOICE="$("$IOS/../scripts/polyglot-voice.sh")"
 
 mkdir -p Resources
@@ -20,7 +19,7 @@ rm -f Resources/en_US-snepssen-medium.onnx Resources/en_US-snepssen-medium.onnx.
 cp "$VOICE" Resources/snepssen-polyglot.onnx
 cp "$VOICE.json" Resources/snepssen-polyglot.onnx.json
 echo "voice: $VOICE"
-rsync -a --delete "$VOICEFORGE/espeak-ng-data/" Resources/espeak-ng-data/
+rm -rf Resources/espeak-ng-data  # now voice-core's, in its resource bundle
 [ -s "$REPO/models/silero_vad.onnx" ] || curl -fsSL -o "$REPO/models/silero_vad.onnx" \
   https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx
 cp "$REPO/models/silero_vad.onnx" Resources/
@@ -46,6 +45,8 @@ BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.p
 [ "$BUNDLE_ID" = "com.snepssen.interpreter" ] && [ -s "$APP/$EXECUTABLE" ] || {
   echo "build produced an invalid app; refusing to install" >&2; exit 1;
 }
+[ -s "$APP/VoiceCore_VoiceCore.bundle/espeak-ng-data/phontab" ] \
+  || { echo "error: voice-core's espeak-ng data is missing from the app" >&2; exit 1; }
 codesign --verify --deep --strict "$APP"
 echo "built: $APP ($(du -sh "$APP" | cut -f1))"
 

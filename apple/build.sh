@@ -2,16 +2,15 @@
 # Build Interpreter.app.
 #
 # xcodebuild rather than `swift build`: MLX compiles Metal shaders, which only
-# Xcode's build system does. The voice is voice-polyglot's newest export
-# (scripts/polyglot-voice.sh) and espeak-ng data comes from voice-forge, both
-# beside this checkout; the translation model
+# Xcode's build system does. The voice is voice-polyglot's newest export or
+# release (scripts/polyglot-voice.sh); espeak-ng and its data come with the
+# voice-core package, in its resource bundle; the translation model
 # (2.3 GB) is not bundled, and is found in ~/Library/Application Support/
 # Interpreter/Models or in this checkout's models/ (scripts/fetch-models.sh).
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 REPO="$(dirname "$ROOT")"
-VOICEFORGE="$(dirname "$REPO")/voice-forge/macos/Sources/VoiceForgeTTS/Resources"
 APP="$ROOT/Interpreter.app"
 CONF="${1:-Release}"
 DERIVED="$ROOT/.build/xcode"
@@ -31,7 +30,6 @@ for scheme in Interpreter tcrun; do
   }
 done
 
-[ -d "$VOICEFORGE/espeak-ng-data" ] || { echo "error: no espeak-ng-data in $VOICEFORGE" >&2; exit 1; }
 VAD="$REPO/models/silero_vad.onnx"
 if [ ! -s "$VAD" ]; then
   mkdir -p "$REPO/models"
@@ -50,11 +48,12 @@ while IFS= read -r b; do
   bundles=$((bundles + 1))
 done < <(find "$PRODUCTS" -maxdepth 1 -name '*.bundle')
 [ -n "$(find "$APP/Contents/Resources" -name default.metallib)" ] || { echo "error: MLX's Metal library is missing" >&2; exit 1; }
+[ -s "$APP/Contents/Resources/VoiceCore_VoiceCore.bundle/Contents/Resources/espeak-ng-data/phontab" ] \
+  || { echo "error: voice-core's espeak-ng data is missing from the app" >&2; exit 1; }
 
 cp "$VOICE" "$APP/Contents/Resources/snepssen-polyglot.onnx"
 cp "$VOICE.json" "$APP/Contents/Resources/snepssen-polyglot.onnx.json"
 echo "voice: $VOICE"
-cp -R "$VOICEFORGE/espeak-ng-data" "$APP/Contents/Resources/"
 cp "$VAD" "$APP/Contents/Resources/"
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/"  # scripts/make-icon.py
 
