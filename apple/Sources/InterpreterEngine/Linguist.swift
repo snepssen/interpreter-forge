@@ -141,9 +141,19 @@ public actor Linguist {
     /// What is worth saying of an output: its first line, without quotes or a
     /// note in brackets at the end ("(This is a somewhat unusual phrase – the
     /// translation reflects…)", which TranslateGemma adds now and then).
+    /// A first line that only announces the rest ("Okay, here's the English
+    /// translation:") is skipped, and where both gendered forms are offered
+    /// ("chciałem/chciałam") the first is said: the voice would read the slash.
     static func spoken(_ output: String) -> String {
         var out = output.trimmingCharacters(in: .whitespacesAndNewlines)
-        out = String(out.split(separator: "\n", omittingEmptySubsequences: true).first ?? "")
+        var lines = out.split(separator: "\n", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if lines.count > 1, lines[0].hasSuffix(":") { lines.removeFirst() }
+        out = lines.first ?? ""
+        out = out.replacing(/(\p{L}{3,})\/(\p{L}+)/) { match in
+            let (first, second) = (String(match.1), String(match.2))
+            return first.prefix(3) == second.prefix(3) ? first : "\(first)/\(second)"
+        }
         if let open = out.lastIndex(of: "("), out.hasSuffix(")"),
            out[open...].split(separator: " ").count > 4, open > out.startIndex {
             out = String(out[..<open])

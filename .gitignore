@@ -18,3 +18,4 @@ apple/iOS/.build/
 apple/iOS/App/Info.plist
 docs/__pycache__/
 .claude/
+samples/*.txt

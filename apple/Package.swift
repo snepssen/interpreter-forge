@@ -51,6 +51,8 @@ let package = Package(
         // The views, shared by the Mac app and the iPhone app.
         .target(name: "InterpreterUI", dependencies: ["InterpreterCore", "InterpreterEngine"]),
         .executableTarget(name: "Interpreter", dependencies: ["InterpreterEngine", "InterpreterUI"]),
+        // Test speech in the app's own voice, for tcrun to interpret.
+        .executableTarget(name: "tcsay", dependencies: ["InterpreterEngine"]),
         // A recording through the live pipeline in real time, for measuring.
         .executableTarget(name: "tcrun", dependencies: [
             "InterpreterCore", "InterpreterEngine", .product(name: "FluidAudio", package: "FluidAudio"),
