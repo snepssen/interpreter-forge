@@ -16,10 +16,11 @@ public enum Resources {
     public static var voice: URL? { polyglotVoice ?? englishVoice }
 
     /// Bundled under one name; in development, voice-polyglot's newest export
-    /// (`work/runs/polyglot/exports/epoch-NNN/`), so a better-trained voice is
-    /// picked up as soon as it is exported.
+    /// (`work/runs/polyglot/exports/epoch-NNN/`) where it is trained, else the
+    /// latest release that `scripts/polyglot-voice.sh` fetched into models/voice.
     public static var polyglotVoice: URL? {
-        first(bundled(polyglotName), newestExport(in: voicePolyglot.appending(path: "work/runs/polyglot/exports")))
+        first(bundled(polyglotName), newestExport(in: voicePolyglot.appending(path: "work/runs/polyglot/exports")),
+              checkout.appending(path: "models/voice/\(polyglotName)"))
     }
 
     static func newestExport(in folder: URL) -> URL? {

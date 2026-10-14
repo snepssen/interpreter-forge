@@ -243,8 +243,11 @@ The voice phonemizes through `Polyphon`, a port of voice-polyglot's
 the Python), and speaks each language at the length scale its export carries:
 the Suno-made languages were read faster than its English, and the scales,
 picked by ear, even them out. `build.sh` and `iOS/build-ios.sh` bundle the
-newest export (`apple/scripts/polyglot-voice.sh`), so a better-trained voice
-is a rebuild away. **Settings → Language → Untrained languages** (off by
+newest voice (`apple/scripts/polyglot-voice.sh`): voice-polyglot's newest
+export where it is trained, anywhere else its latest
+[GitHub Release](https://github.com/snepssen/voice-polyglot/releases), fetched
+into `models/voice/` and checked against its SHA256SUMS. Every build carries
+the newest voice. **Settings → Language → Untrained languages** (off by
 default) also offers Parakeet's other European languages, read through plain
 espeak-ng with no corrections. `tcrun --into hu` runs a recording the same way.
 
