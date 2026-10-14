@@ -67,6 +67,16 @@ public final class Pipeline: @unchecked Sendable {
         get { control.withLock { speaking } }
         set { control.withLock { speaking = newValue } }
     }
+    private var summarising = false
+    /// When the listener falls behind, say the gist instead of the whole
+    /// translation. Off unless chosen: uneven speech is meant to queue, and a
+    /// pause or a slow build-up is context, not something to cut. Only a model
+    /// that takes instructions can do it; TranslateGemma always translates in
+    /// full, and a piece is never marked shortened when it wasn't.
+    public var summarises: Bool {
+        get { control.withLock { summarising } }
+        set { control.withLock { summarising = newValue } }
+    }
     public var failure: String? { control.withLock { terminalFailure } }
     private let inbox = Inbox()
     private let started = ProcessInfo.processInfo.systemUptime
@@ -292,7 +302,7 @@ public final class Pipeline: @unchecked Sendable {
                 }
                 guard !foreign.isEmpty else { continue }
                 let piece = Segment.combine(foreign)
-                let brief = backlog?.brief(speaker.backlog) ?? false
+                let brief = summarises && linguist.model.judges && (backlog?.brief(speaker.backlog) ?? false)
                 let translation = try await linguist.translate(piece.text, brief: brief)
                 try Task.checkCancellation()
                 if echoes(piece.text, translation) {

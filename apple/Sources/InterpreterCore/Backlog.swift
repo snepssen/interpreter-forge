@@ -1,5 +1,6 @@
-/// What a human interpreter does when falling behind: say less, say it faster.
-/// The backlog is how long a piece would wait behind English still to be spoken.
+/// What a human interpreter does when falling behind: say it faster, and, if the
+/// listener chose to keep up rather than hear all, say less.
+/// The backlog is how long a piece would wait behind the interpreter still speaking.
 public struct Backlog: Sendable {
     public var briefAfter = 1.5  // seconds of backlog before translating for the gist
     public var fasterAfter = 1.0  // seconds of backlog before speeding up

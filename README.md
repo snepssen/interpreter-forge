@@ -207,6 +207,17 @@ M1 (one run each; repeated runs vary by about ±0.3 s):
 
 ## Falling behind
 
+In the apps, catching up by saying less is a choice, **Settings → Voice →
+Summarise to keep up**, off by default. Uneven speech is meant to queue: a
+pause, a slow build-up or a speaker thinking aloud is context the next piece
+is translated with, not something to cut. Some listeners would rather follow
+along than hear all of a long story, and for them the gist ("complaining about
+back pain and their boss") is the point. It needs a model that takes
+instructions (Qwen, Gemma 4); TranslateGemma always translates in full, and a
+piece is no longer marked shortened when it wasn't. The speed-up below stays
+on: it loses nothing. `tcrun --summarise` measures the same way. What follows
+is the Python rig, where both are on.
+
 The English can take longer to say than the original, and a speaker who never
 stops gives no room to catch up. So, like a human interpreter, it says less and
 says it faster once English is queueing: past 1.5 s of backlog the next piece is

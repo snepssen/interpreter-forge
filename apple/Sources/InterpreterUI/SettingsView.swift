@@ -83,10 +83,12 @@ public struct SettingsView: View {
                     }
                     .disabled(session.captionsOnly)
                     Toggle("Captions only", isOn: $session.captionsOnly)
+                    Toggle("Summarise to keep up", isOn: $session.summarises)
+                        .disabled(session.translationModel?.judges == false)
                 } header: {
                     Text("Voice")
                 } footer: {
-                    Text("Captions only shows translations without speaking them: for a phone on the table when nobody has headphones.")
+                    Text("Captions only shows translations without speaking them: for a phone on the table when nobody has headphones. Summarise to keep up says only the gist when the interpreter falls behind (“complaining about back pain and their boss”); otherwise everything is translated in full and the voice only speeds up a little. It needs Qwen or Gemma 4: TranslateGemma always translates in full.")
                 }
 
                 Section {

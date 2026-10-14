@@ -3,7 +3,7 @@
 // models, the same contention. The Python rig's `live --from`, in Swift.
 //
 //   tcrun <audio> [--model translategemma-4b-it-4bit] [--languages pl,hu,nl]   (default: any language)
-//         [--into en]   (the listener's language, default English) [--out runs/swift-<name>]
+//         [--into en]   (the listener's language, default English) [--summarise] [--out runs/swift-<name>]
 import AVFoundation
 import FluidAudio
 import Foundation
@@ -17,6 +17,8 @@ var args = Array(CommandLine.arguments.dropFirst())
     return args[i + 1]
 }
 let target = option("--into") ?? "en"
+let summarise = args.contains("--summarise")
+args.removeAll { $0 == "--summarise" }
 let languages = (option("--languages") ?? "").split(separator: ",").map(String.init).filter { $0 != target }
 let modelID = option("--model") ?? ModelCatalog.recommended.id
 let recognitionID = option("--recognition") ?? RecognitionModel.parakeetUltra.rawValue
@@ -62,6 +64,7 @@ let tally = Tally()
 
 info("playing in real time")
 let pipeline = Pipeline(recognizer: recognizer, linguist: linguist, voice: voice, vad: vad)
+pipeline.summarises = summarise
 try pipeline.start(source: Recording(samples), speaker: nil, audible: false) { event in
     tally.lock.withLock {
         switch event {

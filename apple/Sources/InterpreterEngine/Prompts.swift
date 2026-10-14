@@ -25,10 +25,11 @@ enum Prompts {
     }
 
     /// Into English as measured; into another language it is named again, so a
-    /// model whose habit is English is reminded at every piece.
+    /// model whose habit is English is reminded at every piece. `brief` asks
+    /// for the gist, for a listener who chose to keep up rather than hear all.
     static func piece(_ text: String, brief: Bool, into language: String = "English") -> String {
         let into = language == "English" ? "" : " into \(language)"
-        return brief ? "The listener is falling behind. Translate\(into) as briefly as possible, keeping only the essential meaning: \(text)"
+        return brief ? "The listener is falling behind. Instead of translating, give\(into) only the gist of what is being said, in a few words, like a note: \"complaining about back pain and their boss\". Speech: \(text)"
                      : "Translate\(into): \(text)"
     }
 

@@ -133,7 +133,18 @@ public final class LiveSession {
         }
     }
 
+    /// Say the gist instead of the whole translation when falling behind:
+    /// for following a long story as it goes rather than hearing all of it.
+    /// Needs a model that takes instructions. Off unless chosen; remembered.
+    public var summarises: Bool = UserDefaults.standard.bool(forKey: "summarises") {
+        didSet {
+            UserDefaults.standard.set(summarises, forKey: "summarises")
+            applyVoice()
+        }
+    }
+
     private func applyVoice() {
+        pipeline?.summarises = summarises
         pipeline?.speaks = !captionsOnly
         pipeline?.speaker?.volume = captionsOnly ? 0 : Float(voiceVolume)
     }
