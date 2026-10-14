@@ -4,7 +4,8 @@
 #   iOS/build-ios.sh            # build, install on the first connected iPhone
 #   iOS/build-ios.sh --no-install
 #
-# The voice and espeak-ng data come from voice-forge beside translate-core, the
+# The voice is voice-polyglot's newest export (scripts/polyglot-voice.sh) and
+# espeak-ng data comes from voice-forge, both beside translate-core; the
 # VAD model from models/. The translation model is not bundled: the app fetches
 # it on first launch (2.3 GB, best on Wi-Fi).
 set -euo pipefail
@@ -12,10 +13,13 @@ cd "$(dirname "$0")"
 IOS="$(pwd)"
 REPO="$(cd ../.. && pwd)"
 VOICEFORGE="$(dirname "$REPO")/voice-forge/macos/Sources/VoiceForgeTTS/Resources"
-VOICE="en_US-snepssen-medium"
+VOICE="$("$IOS/../scripts/polyglot-voice.sh")"
 
 mkdir -p Resources
-cp "$VOICEFORGE/$VOICE.onnx" "$VOICEFORGE/$VOICE.onnx.json" Resources/
+rm -f Resources/en_US-snepssen-medium.onnx Resources/en_US-snepssen-medium.onnx.json
+cp "$VOICE" Resources/snepssen-polyglot.onnx
+cp "$VOICE.json" Resources/snepssen-polyglot.onnx.json
+echo "voice: $VOICE"
 rsync -a --delete "$VOICEFORGE/espeak-ng-data/" Resources/espeak-ng-data/
 [ -s "$REPO/models/silero_vad.onnx" ] || curl -fsSL -o "$REPO/models/silero_vad.onnx" \
   https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx
