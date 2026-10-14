@@ -147,7 +147,7 @@ private actor PausingLinguist: SpeechInterpreting {
     }
     func gate(_ text: String) async -> Silence? {
         if stage == .gate { await barrier.wait() }
-        return stage == .gate || stage == .remember ? .english : nil
+        return stage == .gate || stage == .remember ? .understood : nil
     }
     func remember(_ text: String) async {
         remembered += 1

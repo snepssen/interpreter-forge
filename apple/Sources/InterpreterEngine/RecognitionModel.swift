@@ -25,8 +25,10 @@ public enum RecognitionModel: String, CaseIterable, Identifiable, Sendable {
                 ?? Constants.languages.keys.sorted().first { Constants.languages[$0] == code }!.capitalized)
         })
     }
-    public func supportedFilter(_ codes: [String]) -> [String] {
-        let supported = codes.filter { languageNames[$0] != nil }
-        return supported.contains("en") ? supported : ["en"] + supported
+    /// The codes it can hear, and `target`, the listener's language, which
+    /// the filter always holds.
+    public func supportedFilter(_ codes: [String], keeping target: String = "en") -> [String] {
+        let supported = codes.filter { languageNames[$0] != nil && $0 != target }
+        return [target] + supported
     }
 }

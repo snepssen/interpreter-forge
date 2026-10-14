@@ -8,15 +8,16 @@ import Tokenizers
 
 /// Why a piece is not spoken.
 public enum Silence: String, Sendable {
-    case english  // already English: kept as context
+    case understood  // already in the listener's language: kept as context
     case language  // in no language expected here: speech recognition went astray
     case echo  // a "translation" that only repeats its source: garbled English
     case unclear  // a reproduced quality problem: shown for clarification, not spoken
 }
 
 /// The translation model, chosen in the model manager, and what it is asked:
-/// translate this; and, if it is a general model, can this be translated yet.
-/// Whether a piece is English, or in a language spoken here, is Apple's
+/// translate this into the listener's language; and, if it is a general model,
+/// can this be translated yet. Whether a piece is already in the listener's
+/// language, or in a language spoken here, is Apple's
 /// language detector's call, the same whichever model is loaded. An actor,
 /// because MLX is driven from one place at a time.
 ///
@@ -26,8 +27,10 @@ public enum Silence: String, Sendable {
 public actor Linguist {
     public let model: TranslationModel
     private let context: ModelContext
-    /// The languages spoken here, if restricted; empty (or English alone) for any.
+    /// The languages spoken here, if restricted; empty for any.
     private var languages: [String]
+    /// The listener's language, which everything is interpreted into.
+    private var target: String
     private var system: String
     private var history: [(source: String, target: String, language: String)] = []
     private let contextPieces = 3
@@ -42,7 +45,7 @@ public actor Linguist {
     /// mid-thought, and two-word replies are where the detector is unsure.
     private var lastLanguage: String?
 
-    public init(model: TranslationModel, at directory: URL, languages: [String]) async throws {
+    public init(model: TranslationModel, at directory: URL, languages: [String], target: String = "en") async throws {
         // Variable shapes otherwise grow MLX's cache without bound; a phone has less to spare.
         #if os(iOS)
         MLX.Memory.cacheLimit = 256 << 20
@@ -59,24 +62,31 @@ public actor Linguist {
         translator = try PromptCache(context.model)
         self.model = model
         self.context = context
-        self.languages = languages
-        system = Self.system(for: languages)
+        self.target = target
+        self.languages = languages.filter { $0 != target }
+        system = Self.system(for: self.languages, into: target)
     }
 
-    public func setLanguages(_ languages: [String]) {
-        if self.languages != languages { forget() }
+    /// `languages` spoken here (empty for any), interpreted into `target`.
+    public func setLanguages(_ languages: [String], target: String) {
+        let languages = languages.filter { $0 != target }
+        if self.languages != languages || self.target != target { forget() }
         self.languages = languages
-        system = Self.system(for: languages)
+        self.target = target
+        system = Self.system(for: languages, into: target)
     }
 
     public func setRecognitionModel(_ model: RecognitionModel) {
         detectionLanguages = model == .whisper ? model.languageNames.keys.sorted() : nil
     }
 
-    private static func system(for languages: [String]) -> String {
-        let spoken = languages.filter { $0 != "en" }
-        return Prompts.translate + (spoken.isEmpty ? "" : Prompts.speakers(
+    private static func system(for spoken: [String], into target: String) -> String {
+        Prompts.translate(into: name(target)) + (spoken.isEmpty ? "" : Prompts.speakers(
             Languages.list(spoken, names: RecognitionModel.whisper.languageNames)))
+    }
+
+    static func name(_ code: String) -> String {
+        Languages.names[code] ?? RecognitionModel.whisper.languageNames[code] ?? code
     }
 
     /// The first token of each spelling; the model's answer starts with one of them.
@@ -86,7 +96,7 @@ public actor Linguist {
 
     // MARK: translation
 
-    /// English for `text`; `brief` asks a general model for the gist only, to
+    /// `text` in the listener's language; `brief` asks a general model for the gist only, to
     /// catch up a backlog (TranslateGemma takes no instructions).
     public func translate(_ text: String, brief: Bool = false) throws -> String {
         if let concern = TranslationQuality.concern(source: text) { throw UnclearTranslation(concern) }
@@ -101,7 +111,9 @@ public actor Linguist {
         let fresh = try translator.prepare(for: prompt)
         // English seldom needs three times the tokens of its source; a cap keeps
         // an aside from being spoken and the listener from falling behind.
-        let cap = max(24, 3 * context.tokenizer.encode(text: text, addSpecialTokens: false).count)
+        // Other languages cost a tokenizer more per word than English does.
+        let factor = target == "en" ? 3 : 4
+        let cap = max(24, factor * context.tokenizer.encode(text: text, addSpecialTokens: false).count)
         var iterator = try TokenIterator(input: LMInput(tokens: MLXArray(fresh)), model: context.model,
                                          cache: translator.kv, parameters: GenerateParameters(maxTokens: cap, temperature: 0))
         var produced: [Int] = []
@@ -143,43 +155,48 @@ public actor Linguist {
         switch model.style {
         case .translateGemma:
             // Its template: each turn names the source language; earlier pieces
-            // are earlier turns. English kept as context can't be "translated"
-            // from English to English, so only translated pieces go in.
+            // are earlier turns. A piece kept as context because it was already
+            // in the listener's language can't be "translated" into itself, so
+            // only translated pieces go in.
+            let target = self.target
             func turn(_ text: String, _ language: String) -> [String: any Sendable] {
                 ["role": "user", "content": [["type": "text", "source_lang_code": language,
-                                               "target_lang_code": "en", "text": text] as [String: any Sendable]]]
+                                               "target_lang_code": target, "text": text] as [String: any Sendable]]]
             }
             var messages: [[String: any Sendable]] = []
-            for piece in history where piece.language != "en" {
+            for piece in history where piece.language != target {
                 messages += [turn(piece.source, piece.language), ["role": "assistant", "content": piece.target]]
             }
             return messages + [turn(text, language)]
         case .instructions:
             var messages: [[String: any Sendable]] = [["role": "system", "content": system]]
             for piece in history {
-                messages.append(["role": "user", "content": Prompts.piece(piece.source, brief: false)])
+                messages.append(["role": "user", "content": Prompts.piece(piece.source, brief: false, into: Self.name(target))])
                 messages.append(["role": "assistant", "content": piece.target])
             }
             // Not told the source language: told it, Qwen once gave German back untranslated.
-            messages.append(["role": "user", "content": Prompts.piece(text, brief: brief)])
+            messages.append(["role": "user", "content": Prompts.piece(text, brief: brief, into: Self.name(target))])
             return messages
         }
     }
 
     /// The language to translate from: the detector's answer when it is sure,
-    /// else the last one it was sure of, else its best guess.
+    /// else the last one it was sure of, else its best guess. Never the
+    /// listener's own language: into English, Polish is the likeliest source,
+    /// into anything else English is.
     private func source(of text: String) -> String {
         let guess = detector.guess(text, languages: detectionLanguages)
-        if let guess, guess.confidence >= 0.8, guess.code != "en" {
+        if let guess, guess.confidence >= 0.8, guess.code != target {
             lastLanguage = guess.code
             return guess.code
         }
-        return lastLanguage ?? guess.map { $0.code == "en" ? "pl" : $0.code } ?? "pl"
+        let fallback = target == "en" ? "pl" : "en"
+        return lastLanguage ?? guess.map { $0.code == target ? fallback : $0.code } ?? fallback
     }
 
     /// Keep a piece that needed no translation as context for the ones that do.
     public func remember(_ text: String) {
-        history.append((text, text, "en"))
+        history.append((text, text, target))
         if history.count > 2 * contextPieces { history.removeFirst(history.count - contextPieces) }
     }
 
@@ -190,7 +207,7 @@ public actor Linguist {
 
     /// Read every prompt's instructions once, so the first real piece doesn't pay for it.
     public func warmUp() throws {
-        _ = try translate("Hallo, wie geht's?")
+        _ = try translate(target == "de" ? "Dzień dobry, jak się masz?" : "Hallo, wie geht's?")
         if model.judges { _ = try complete("Hallo") }
         forget()
     }
@@ -207,17 +224,23 @@ public actor Linguist {
         return try ask(Prompts.complete, text) >= 0.5
     }
 
-    /// Before translating: does this piece need it? English the listener
-    /// understands; a language not spoken here (if restricted) is misheard.
-    /// The text's own signs come first, then Apple's language detector.
+    /// Before translating: does this piece need it? The listener's own
+    /// language they understand; a language not spoken here (if restricted)
+    /// is misheard. The text's own signs come first, then Apple's language
+    /// detector.
     public func gate(_ text: String) -> Silence? {
         let guess = detector.guess(text, languages: detectionLanguages)
-        let foreign = text.filter { $0.isLetter && !$0.isASCII }.count
-        if foreign < 2, let guess, guess.code == "en", guess.confidence >= 0.6 { return .english }
-        guard languages.contains(where: { $0 != "en" }) else { return nil }
-        if let verdict = Languages.evidence(text, languages) { return verdict ? nil : .language }
+        if let guess, guess.code == target, guess.confidence >= 0.6 {
+            // English has no letters outside ASCII: two of them and the
+            // detector's "English" is a misreading.
+            let foreign = text.filter { $0.isLetter && !$0.isASCII }.count
+            if target != "en" || foreign < 2 { return .understood }
+        }
+        guard !languages.isEmpty else { return nil }
+        let expected = [target] + languages
+        if let verdict = Languages.evidence(text, expected) { return verdict ? nil : .language }
         // Dropping real speech is the worse mistake: only a sure guess turns it away.
-        if let guess, guess.confidence >= 0.8, !languages.contains(guess.code) { return .language }
+        if let guess, guess.confidence >= 0.8, !expected.contains(guess.code) { return .language }
         return nil
     }
 

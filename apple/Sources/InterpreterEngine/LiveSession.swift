@@ -36,27 +36,72 @@ public final class LiveSession {
     public private(set) var lines: [Line] = []
     public private(set) var hearing = ""
     public private(set) var level: Float = 0
-    /// English is playing in the headphones right now.
+    /// The interpreter's voice is playing in the headphones right now.
     public private(set) var speaking = false
     public private(set) var notice: String?
 
-    /// English alone means any language: everything that isn't English is
-    /// translated. Naming languages restricts to them, and anything else is
-    /// taken as misheard, which helps where Polish keeps coming out as Russian
-    /// but would silence a Romanian guest. English is understood by the
-    /// listener and kept as context, not spoken. Remembered between launches.
+    /// The listener's language alone means any language: everything that
+    /// isn't theirs is translated. Naming languages restricts to them, and
+    /// anything else is taken as misheard, which helps where Polish keeps
+    /// coming out as Russian but would silence a Romanian guest. The
+    /// listener's own language is understood and kept as context, not
+    /// spoken; it is always in this list, the marker the filter is read
+    /// against. Remembered between launches.
     public var languages: [String] = UserDefaults.standard.stringArray(forKey: "languages") ?? ["en"] {
         didSet {
             UserDefaults.standard.set(languages, forKey: "languages")
-            let languages = languages
-            Task { [recognizer, linguist] in
-                await recognizer?.setLanguages(languages)
-                await linguist?.setLanguages(languages)
-            }
+            applyLanguages()
         }
     }
 
-    public var anyLanguage: Bool { !languages.contains { $0 != "en" } }
+    /// The language the listener hears: everything is interpreted into it and
+    /// the voice speaks it. One the voice was trained on, unless untrained
+    /// languages are allowed in Settings. Remembered.
+    public var target: String = UserDefaults.standard.string(forKey: "target") ?? "en" {
+        didSet {
+            guard target != oldValue else { return }
+            UserDefaults.standard.set(target, forKey: "target")
+            // The new language takes the old one's place as the marker; one
+            // that was named as spoken here is now the listener's own.
+            languages = [target] + languages.filter { $0 != oldValue && $0 != target }
+        }
+    }
+
+    /// Offer the languages the voice was not trained on: it reads them through
+    /// plain espeak-ng, with an accent and no corrections. Off unless chosen.
+    public var untrainedLanguages: Bool = UserDefaults.standard.bool(forKey: "untrainedLanguages") {
+        didSet {
+            UserDefaults.standard.set(untrainedLanguages, forKey: "untrainedLanguages")
+            if !untrainedLanguages && !Self.trainedTargets.contains(target) { target = "en" }
+        }
+    }
+
+    /// What the voice speaks well, in the order offered.
+    public static let trainedTargets = Polyphon.trained
+    /// What it can be asked to speak beyond those: Parakeet's European
+    /// languages, every one of which espeak-ng reads.
+    public static let untrainedTargets = Languages.names.keys.filter { !Polyphon.trained.contains($0) }
+        .sorted { Languages.names[$0]! < Languages.names[$1]! }
+    public var targetChoices: [String] {
+        Self.trainedTargets + (untrainedLanguages ? Self.untrainedTargets : [])
+    }
+    public func isTrained(_ code: String) -> Bool { Self.trainedTargets.contains(code) }
+    public func languageName(_ code: String) -> String {
+        Languages.names[code] ?? availableLanguages[code] ?? code
+    }
+
+    /// The languages spoken here, if restricted; empty for any.
+    public var spoken: [String] { languages.filter { $0 != target } }
+    public var anyLanguage: Bool { spoken.isEmpty }
+
+    private func applyLanguages() {
+        let (spoken, target) = (spoken, target)
+        voice?.language = target
+        Task { [recognizer, linguist] in
+            await recognizer?.setLanguages(spoken)
+            await linguist?.setLanguages(spoken, target: target)
+        }
+    }
     /// The translation model in use, chosen in the picker or the manager; remembered.
     public private(set) var translationModel: TranslationModel? =
         ModelCatalog.model(UserDefaults.standard.string(forKey: "translationModel"))
@@ -153,11 +198,11 @@ public final class LiveSession {
         do {
             try Task.checkCancellation()
             guard let voiceURL = Resources.voice, let espeak = Resources.espeakData else {
-                throw Problem("No voice. Build with build.sh, or keep voice-forge beside translate-core.")
+                throw Problem("No voice. Build with build.sh, or keep voice-polyglot and voice-forge beside translate-core.")
             }
             if recognizer == nil {
                 phase = .loading("Loading speech recognition…")
-                let loaded = try await Recognizer.load(model: recognitionModel, languages: languages) { fraction in
+                let loaded = try await Recognizer.load(model: recognitionModel, languages: spoken) { fraction in
                     Task { @MainActor in
                         if self.active, self.preparationID == preparation, self.recognizer == nil, case .loading = self.phase {
                             self.phase = .loading(fraction < 1
@@ -173,18 +218,19 @@ public final class LiveSession {
             if linguist?.model != model {
                 linguist = nil  // one translation model in memory at a time
                 phase = .loading("Loading \(model.name)…")
-                linguist = try await Linguist(model: model, at: modelURL, languages: languages)
+                linguist = try await Linguist(model: model, at: modelURL, languages: spoken, target: target)
             }
             try Task.checkCancellation()
             if voice == nil {
                 phase = .loading("Loading the voice…")
                 voice = try Voice(model: voiceURL, espeakData: espeak)
             }
+            voice?.language = target
             try Task.checkCancellation()
             phase = .loading("Warming up…")
             try await linguist?.warmUp()
-            await recognizer?.setLanguages(languages)
-            await linguist?.setLanguages(languages)
+            await recognizer?.setLanguages(spoken)
+            await linguist?.setLanguages(spoken, target: target)
             await linguist?.setRecognitionModel(recognitionModel)
             try Task.checkCancellation()
             storeChanges += 1
@@ -272,7 +318,7 @@ public final class LiveSession {
         recognitionModel = model
         UserDefaults.standard.set(model.rawValue, forKey: "recognitionModel")
         recognizer = nil
-        let supported = model.supportedFilter(languages)
+        let supported = model.supportedFilter(languages, keeping: target)
         if supported != languages {
             languages = supported
             notice = "The language filter now contains only languages supported by \(model.name)."
@@ -442,7 +488,7 @@ public final class LiveSession {
             update(id) {
                 $0.silence = why
                 $0.translation = translation
-                if why == .english { $0.language = "en" }
+                if why == .understood { $0.language = self.target }
             }
         case .interpreted(let indices, let translation, _, let lags, let brief, let pace):
             let ids = indices.compactMap { lineIDs[$0] }

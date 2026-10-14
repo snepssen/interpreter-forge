@@ -281,7 +281,7 @@ public final class Pipeline: @unchecked Sendable {
                     let reason = await linguist.gate(segment.text)
                     try Task.checkCancellation()
                     if let why = reason {
-                        if why == .english {
+                        if why == .understood {
                             await linguist.remember(segment.text)
                             try Task.checkCancellation()
                         }

@@ -1,3 +1,4 @@
+import InterpreterCore
 import InterpreterEngine
 import SwiftUI
 
@@ -52,9 +53,25 @@ public struct SettingsView: View {
                 } header: {
                     Text("Microphone")
                 } footer: {
-                    Text("Headphone microphones sit closer to the people talking. AirPods that support it record in full quality; others switch to call quality, and the English then sounds like a phone call. Whole room asks them to hear everyone, not mainly you.")
+                    Text("Headphone microphones sit closer to the people talking. AirPods that support it record in full quality; others switch to call quality, and the interpreter then sounds like a phone call. Whole room asks them to hear everyone, not mainly you.")
                 }
                 #endif
+
+                Section {
+                    Picker("Interpret into", selection: $session.target) {
+                        ForEach(session.targetChoices, id: \.self) { code in
+                            Text(session.isTrained(code) ? session.languageName(code)
+                                                         : "\(session.languageName(code)) (untrained)").tag(code)
+                        }
+                    }
+                    .disabled(session.isLive || session.isBusy)
+                    Toggle("Untrained languages", isOn: $session.untrainedLanguages)
+                        .disabled(session.isLive || session.isBusy)
+                } header: {
+                    Text("Language")
+                } footer: {
+                    Text("The voice was trained on \(Languages.list(LiveSession.trainedTargets)). Untrained languages offers Parakeet's other European languages too; the voice reads them without its corrections, so expect an accent and some wrong sounds.")
+                }
 
                 Section {
                     Slider(value: $session.voiceVolume, in: 0...1) {
@@ -73,7 +90,7 @@ public struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Show English lines", isOn: $showEnglish)
+                    Toggle("Show lines already in \(session.languageName(session.target))", isOn: $showEnglish)
                     Button("Clear conversation", role: .destructive) { session.clear() }
                         .disabled(session.lines.isEmpty || session.isLive)
                 } header: {

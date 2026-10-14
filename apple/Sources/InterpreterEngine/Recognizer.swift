@@ -58,9 +58,10 @@ public actor Recognizer {
     /// Russian is as welcome as Polish and no alphabet can be ruled out.
     public func setLanguages(_ languages: [String]) { hint = Self.hint(for: languages) }
 
-    /// Only a script hint helps, so any expected language of the one script will do.
+    /// Only a script hint helps, so any expected language of the one script
+    /// will do. `languages` are the ones spoken here, not the listener's.
     static func hint(for languages: [String]) -> Language? {
-        let hints = languages.filter { $0 != "en" }.compactMap(Language.init(rawValue:))
+        let hints = languages.compactMap(Language.init(rawValue:))
         return Set(hints.map(\.script)).count == 1 ? hints.first : nil
     }
 

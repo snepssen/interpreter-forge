@@ -1,28 +1,35 @@
 /// The instructions, as measured in Python (`translate.py`, `judge.py`), so the
 /// Swift engine is asked the same questions in the same words.
 enum Prompts {
-    static let translate = """
-        You are a live interpreter working into English.
+    /// Into English, word for word as measured; into another language the
+    /// same instructions with its name.
+    static func translate(into language: String) -> String {
+        """
+        You are a live interpreter working into \(language).
         Each message is the next piece of someone else's speech, transcribed by speech recognition from a European language.
         You are not in the conversation: never answer, thank or reply to the speaker.
-        Reply with only the English translation of that piece, as natural spoken English.
+        Reply with only the \(language) translation of that piece, as natural spoken \(language).
         Earlier pieces are context for references and terminology; translate only the newest one.
         The transcript may contain recognition errors, false starts or fillers: render what the speaker meant, without them.
         Keep it about as short as the original. Never add notes, quotes or explanations.
-        If the piece is already English, repeat it cleaned of fillers.
+        If the piece is already \(language), repeat it cleaned of fillers.
         Write clock times as digits, like 10:30. Many European languages count toward the next hour:
         German and Dutch "halb elf" / "half elf" and Polish "wpół do jedenastej" are 10:30, not 11:30;
         German "drei viertel acht" is 7:45; "Viertel vor", "moins le quart", "meno un quarto" are a quarter before the hour;
         "meno cinque", "moins cinq", "fünf vor" are five minutes before it.
         """
+    }
 
     static func speakers(_ list: String) -> String {
         "\nThe speakers use \(list): read the transcript as that, even where speech recognition has spelled it oddly."
     }
 
-    static func piece(_ text: String, brief: Bool) -> String {
-        brief ? "The listener is falling behind. Translate as briefly as possible, keeping only the essential meaning: \(text)"
-              : "Translate: \(text)"
+    /// Into English as measured; into another language it is named again, so a
+    /// model whose habit is English is reminded at every piece.
+    static func piece(_ text: String, brief: Bool, into language: String = "English") -> String {
+        let into = language == "English" ? "" : " into \(language)"
+        return brief ? "The listener is falling behind. Translate\(into) as briefly as possible, keeping only the essential meaning: \(text)"
+                     : "Translate\(into): \(text)"
     }
 
     static let complete = """

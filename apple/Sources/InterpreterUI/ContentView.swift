@@ -7,8 +7,8 @@ import AVFoundation
 import UIKit
 #endif
 
-/// The shared conversation screen. Mostly it isn't looked at: the English is in
-/// the headphones. So it answers three things at a glance (is it on, what is it
+/// The shared conversation screen. Mostly it isn't looked at: the interpreter
+/// is in the headphones. So it answers three things at a glance (is it on, what is it
 /// doing, what was just said) and keeps everything else one tap away.
 public struct ContentView: View {
     @Bindable var session: LiveSession
@@ -46,8 +46,7 @@ public struct ContentView: View {
 
     private var topBar: some View {
         HStack(spacing: 4) {
-            LanguageMenu(languages: $session.languages, names: session.availableLanguages,
-                         locked: session.isLive || session.isBusy)
+            LanguageMenu(session: session, locked: session.isLive || session.isBusy)
                 .layoutPriority(-1)
             Spacer(minLength: 8)
             #if os(macOS)
@@ -122,10 +121,11 @@ public struct ContentView: View {
     }
 
     private var readyDetail: String {
-        let chosen = session.languages.filter { $0 != "en" }
-        if chosen.isEmpty { return "Other languages are spoken to you in English." }
+        let chosen = session.spoken
+        let into = session.languageName(session.target)
+        if chosen.isEmpty { return "Other languages are spoken to you in \(into)." }
         let verb = chosen.count == 1 ? "is" : "are"
-        return "\(session.languageList(chosen)) \(verb) spoken to you in English; other languages are skipped."
+        return "\(session.languageList(chosen)) \(verb) spoken to you in \(into); other languages are skipped."
     }
 
     private var transcript: some View {
@@ -150,11 +150,11 @@ public struct ContentView: View {
     }
 
     private var visible: [LiveSession.Line] {
-        session.lines.filter { showEnglish || ($0.silence != .english && $0.silence != .echo) }
+        session.lines.filter { showEnglish || ($0.silence != .understood && $0.silence != .echo) }
     }
 
-    /// The newest piece meant for the listener stays large, even when English
-    /// was said after it: that is the line to catch up on.
+    /// The newest piece meant for the listener stays large, even when their own
+    /// language was spoken after it: that is the line to catch up on.
     private var latestID: Int? {
         visible.last { $0.silence == nil || $0.silence == .unclear }?.id
     }
@@ -195,7 +195,7 @@ public struct ContentView: View {
         .overlay(alignment: .top) { Divider() }
     }
 
-    /// One status for the whole screen: where the English goes before Live,
+    /// One status for the whole screen: where the voice goes before Live,
     /// what the interpreter is doing during it.
     private var status: String {
         switch session.phase {
@@ -270,7 +270,8 @@ struct LiveButton: View {
 }
 
 /// One piece of conversation. The newest translation is large, with what was
-/// said under it; older lines are plain, English lines quieter still.
+/// said under it; older lines are plain, lines already in the listener's
+/// language quieter still.
 struct LineView: View {
     let line: LiveSession.Line
     var prominent = false
@@ -288,7 +289,7 @@ struct LineView: View {
 
     @ViewBuilder private var content: some View {
         switch line.silence {
-        case .english?, .echo?:
+        case .understood?, .echo?:
             Text(line.source).italic().foregroundStyle(.secondary)
         case .language?:
             Text(line.source).foregroundStyle(.tertiary)
@@ -330,40 +331,53 @@ struct LanguageChip: View {
     }
 }
 
+/// What is spoken here and what it becomes: "Any language → Hungarian".
 struct LanguageMenu: View {
-    @Binding var languages: [String]
-    let names: [String: String]
+    @Bindable var session: LiveSession
     let locked: Bool
+    private var target: String { session.target }
+    private var into: String { session.languageName(target) }
     private var all: [(code: String, name: String)] {
-        names.map { (code: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
+        session.availableLanguages.filter { $0.key != target }
+            .map { (code: $0.key, name: $0.value) }.sorted { $0.name < $1.name }
     }
-    private var selected: [String] { languages.filter { $0 != "en" } }
+    private var selected: [String] { session.spoken }
     private var any: Bool { selected.isEmpty }
     private var summary: String {
         if any { return "Any language" }
         if selected.count > 2 { return "\(selected.count) languages" }
-        return Languages.list(selected, names: names)
+        return session.languageList(selected)
     }
     private func binding(_ code: String) -> Binding<Bool> {
-        Binding(get: { languages.contains(code) }, set: { on in
-            if on && !languages.contains(code) { languages.append(code) }
-            else if !on { languages.removeAll { $0 == code } }
+        Binding(get: { session.languages.contains(code) }, set: { on in
+            if on && !session.languages.contains(code) { session.languages.append(code) }
+            else if !on { session.languages.removeAll { $0 == code } }
         })
     }
     var body: some View {
         Menu {
-            Button { languages = ["en"] } label: {
+            Picker(selection: $session.target) {
+                ForEach(session.targetChoices, id: \.self) { code in
+                    Text(session.isTrained(code) ? session.languageName(code)
+                                                 : "\(session.languageName(code)) (untrained)").tag(code)
+                }
+            } label: {
+                Label("Into \(into)", systemImage: "speaker.wave.2")
+            }
+            .pickerStyle(.menu)
+            Divider()
+            Button { session.languages = [target] } label: {
                 if any { Label("Any language", systemImage: "checkmark") } else { Text("Any language") }
             }
             Section("Only these languages") {
-                ForEach(all.filter { $0.code != "en" }, id: \.code) { language in
+                ForEach(all, id: \.code) { language in
                     Toggle(language.name, isOn: binding(language.code))
                 }
             }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "globe")
-                Text(summary + " → English").lineLimit(1)
+                Text(summary + " → " + into).lineLimit(1)
                 if !locked { Image(systemName: "chevron.down").font(.caption2.weight(.bold)) }
             }
             .font(.callout.weight(.medium))
@@ -377,14 +391,14 @@ struct LanguageMenu: View {
         .fixedSize()
         #endif
         .disabled(locked)
-        .help("Choose the languages spoken here. Other languages are skipped.")
-        .accessibilityLabel("Spoken languages")
-        .accessibilityValue(any ? "Any supported language into English" : Languages.list(selected, names: names) + " into English")
+        .help("Choose the languages spoken here, and the one they are interpreted into.")
+        .accessibilityLabel("Languages")
+        .accessibilityValue((any ? "Any supported language" : session.languageList(selected)) + " into " + into)
     }
 }
 
 #if os(macOS)
-/// Which microphone hears the room and where the English goes.
+/// Which microphone hears the room and where the voice goes.
 struct AudioMenu: View {
     @Bindable var session: LiveSession
     var body: some View {

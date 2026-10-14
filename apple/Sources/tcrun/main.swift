@@ -2,7 +2,8 @@
 // measuring what the app does without a microphone: the same loop, the same
 // models, the same contention. The Python rig's `live --from`, in Swift.
 //
-//   tcrun <audio> [--model translategemma-4b-it-4bit] [--languages en,pl,hu,nl]   (default: any language) [--out runs/swift-<name>]
+//   tcrun <audio> [--model translategemma-4b-it-4bit] [--languages pl,hu,nl]   (default: any language)
+//         [--into en]   (the listener's language, default English) [--out runs/swift-<name>]
 import AVFoundation
 import FluidAudio
 import Foundation
@@ -15,12 +16,13 @@ var args = Array(CommandLine.arguments.dropFirst())
     defer { args.removeSubrange(i...(i + 1)) }
     return args[i + 1]
 }
-let languages = (option("--languages") ?? "en").split(separator: ",").map(String.init)
+let target = option("--into") ?? "en"
+let languages = (option("--languages") ?? "").split(separator: ",").map(String.init).filter { $0 != target }
 let modelID = option("--model") ?? ModelCatalog.recommended.id
 let recognitionID = option("--recognition") ?? RecognitionModel.parakeetUltra.rawValue
 let outOption = option("--out")
 guard let input = args.first else {
-    print("usage: tcrun <audio> [--recognition parakeet-ultra|whisper-large-v3-v20240930-626mb] [--languages en,pl,hu,nl] [--out dir]")
+    print("usage: tcrun <audio> [--recognition parakeet-ultra|whisper-large-v3-v20240930-626mb] [--languages pl,hu,nl] [--into en] [--out dir]")
     exit(2)
 }
 let inputURL = URL(fileURLWithPath: input)
@@ -42,10 +44,12 @@ guard let recognition = RecognitionModel(rawValue: recognitionID) else {
 }
 let recognizer = try await Recognizer.load(model: recognition, languages: languages)
 info("recognising with \(recognition.name)")
-let linguist = try await Linguist(model: model, at: modelURL, languages: languages)
+let linguist = try await Linguist(model: model, at: modelURL, languages: languages, target: target)
 await linguist.setRecognitionModel(recognition)
 info("translating with \(model.name)" + (model.judges ? "" : ", cutting without a judge"))
 let voice = try Voice(model: voiceURL, espeakData: espeak)
+voice.language = target
+info("speaking \(target) with \(voice.isPolyglot ? "the polyglot voice" : "the English voice")")
 try await linguist.warmUp()
 
 final class Tally: @unchecked Sendable {
@@ -90,7 +94,7 @@ let lags = tally.lags.sorted()
 if !lags.isEmpty {
     print(String(format: "\nlag           median %.1f s, max %.1f s over %d pieces", lags[lags.count / 2], lags.last!, lags.count))
 }
-print("not spoken    \(tally.silent[.english] ?? 0) English, \(tally.silent[.echo] ?? 0) echoes, \(tally.silent[.language] ?? 0) misheard")
+print("not spoken    \(tally.silent[.understood] ?? 0) already \(target), \(tally.silent[.echo] ?? 0) echoes, \(tally.silent[.language] ?? 0) misheard")
 
 // The listen-back: left the speaker, right the interpreter, where it would have played.
 if let speaker = pipeline.speaker {

@@ -9,14 +9,15 @@ Everything runs locally.
                   ▲      │
                   └ ASR ◀┘  re-reads the uncommitted tail every 0.5 s
 
-**European languages → English**, on Apple Silicon Macs and iPhones.
+**European languages → English**, on Apple Silicon Macs and iPhones; the apps
+also interpret into Polish, Hungarian, German, Dutch, French, Spanish or Italian.
 
 | stage     | model                                        |
 |-----------|----------------------------------------------|
 | VAD       | Silero VAD v5 (ONNX)                         |
 | ASR       | Parakeet TDT 0.6B v3 via `parakeet-mlx` — 25 European languages, punctuated |
 | translate | Qwen3-4B-Instruct-2507, 4-bit MLX, carrying the last three pieces as context |
-| speak     | Piper; defaults to the voice-forge voice next door in `../voice-forge` |
+| speak     | Piper; the Python rig uses the voice-forge voice in `../voice-forge`, the apps the polyglot snepssen from `../voice-polyglot` |
 
 ## The Mac app
 
@@ -112,7 +113,7 @@ session. Then test a session offline to confirm the models are reusable.
 |---|---|---|
 | speech recognition | MLX on the GPU, 300–800 ms a pass | FluidAudio on the Neural Engine, 75–161 ms |
 | translation | Qwen3-4B, MLX | the same model, MLX Swift, ~1 s |
-| voice | Piper (onnxruntime) | voice-forge's phonemizer, Piper on ONNX Runtime |
+| voice | Piper (onnxruntime) | Polyphon (voice-polyglot's corrected espeak-ng, ported), Piper on ONNX Runtime |
 | scheduling | translation first: one GPU | side by side: ASR on the Neural Engine, translation on the GPU |
 
 The timings above were measured with the previous Parakeet v3 recognizer;
@@ -215,6 +216,26 @@ delivers about 1.05x and 1.4x about 1.35x. On the French run-on this brings the
 interpreter's speech from 19.1 s down to 16.1 s against 15.5 s of source, and the
 worst lag from 14.9 s to 12.4 s; what remains is the 11 s before the first piece
 could be cut at all. `--no-catch-up` turns it off.
+
+## Interpreting into another language
+
+The apps speak through the polyglot snepssen voice (`../voice-polyglot`),
+trained on English, Polish, Hungarian, German, Dutch, French, Spanish and
+Italian. The language menu's **Into** picks the listener's language, the
+one everything is interpreted into; that language then takes English's place
+below: understood, kept as context and not spoken, while English becomes one
+more language to translate. The prompts name it, and TranslateGemma is given
+it as its target code.
+
+The voice phonemizes through `Polyphon`, a port of voice-polyglot's
+`polyphon.py` held to it id for id (`PolyphonTests`, fixtures generated from
+the Python), and speaks each language at the length scale its export carries:
+the Suno-made languages were read faster than its English, and the scales,
+picked by ear, even them out. `build.sh` and `iOS/build-ios.sh` bundle the
+newest export (`apple/scripts/polyglot-voice.sh`), so a better-trained voice
+is a rebuild away. **Settings → Language → Untrained languages** (off by
+default) also offers Parakeet's other European languages, read through plain
+espeak-ng with no corrections. `tcrun --into hu` runs a recording the same way.
 
 ## English is left alone
 
