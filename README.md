@@ -238,8 +238,9 @@ below: understood, kept as context and not spoken, while English becomes one
 more language to translate. The prompts name it, and TranslateGemma is given
 it as its target code.
 
-The voice phonemizes through `Polyphon`, a port of voice-polyglot's
-`polyphon.py` held to it id for id (`PolyphonTests`, fixtures generated from
+The voice phonemizes through `Polyphon`, from the shared
+[voice-core](https://github.com/snepssen/voice-core) package: a port of voice-polyglot's
+`polyphon.py` held to it id for id (voice-core's tests, fixtures generated from
 the Python), and speaks each language at the length scale its export carries:
 the Suno-made languages were read faster than its English, and the scales,
 picked by ear, even them out. `build.sh` and `iOS/build-ios.sh` bundle the
