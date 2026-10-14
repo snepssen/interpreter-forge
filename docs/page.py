@@ -6,8 +6,9 @@ chrome every page in the family shares. Adding a section is a dict in
 its own.
 
 Prose is authored HTML. Every figure quoted here was measured: the run shown
-is `tcrun samples/de_halting.wav` with TranslateGemma on an M1 Mac, and the
-conversation numbers are the README's, from a 70-minute recording.
+is `tcrun samples/de_halting.wav` with TranslateGemma on an M1 Mac, the
+conversation numbers are the README's, from a 70-minute recording, and the
+round trip is `scripts/make-snepssen-samples.sh` through `tcrun --into`.
 """
 
 FONTS = "fonts.css"
@@ -66,6 +67,20 @@ ITALIAN_RUN = (
     '      The clock time was unclear in speech recognition. Please repeat it.'
 )
 
+ROUND_TRIP = """  <table>
+    <thead><tr><th>Snepssen speaks</th><th>Interpreted into</th><th>Words recognition heard right</th></tr></thead>
+    <tbody>
+      <tr><td>French</td><td>Italian</td><td>94%</td></tr>
+      <tr><td>English</td><td>Polish</td><td>92%</td></tr>
+      <tr><td>Dutch</td><td>Spanish</td><td>90%</td></tr>
+      <tr><td>Spanish</td><td>Dutch</td><td>90%</td></tr>
+      <tr><td>German</td><td>Hungarian</td><td>86%</td></tr>
+      <tr><td>Italian</td><td>French</td><td>86%</td></tr>
+      <tr><td>Hungarian</td><td>German</td><td>85%</td></tr>
+      <tr><td>Polish</td><td>English</td><td>82%</td></tr>
+    </tbody>
+  </table>"""
+
 MODELS = """  <table>
     <thead><tr><th>Translator</th><th>Meaning errors in 26 lines</th><th>Judges a complete thought</th><th>Memory</th></tr></thead>
     <tbody>
@@ -91,22 +106,22 @@ PAGE = {
         "badge": "macOS · iPhone · on-device",
         "fonts": FONTS,
         "description": (
-            "Live interpretation into English that waits for a complete "
-            "thought, like a human interpreter, and runs entirely on a Mac "
-            "or an iPhone."),
+            "Live interpretation that waits for a complete thought, like a "
+            "human interpreter, and speaks it in your language, entirely on "
+            "a Mac or an iPhone."),
         "og_description": (
-            "Polish, Hungarian, German or any of 25 languages around you, in "
-            "English in your ear a few seconds later. Nothing leaves the "
-            "device."),
+            "Any of 25 languages around you, in English, Polish, Hungarian, "
+            "German, Dutch, French, Spanish or Italian in your ear a few "
+            "seconds later. Nothing leaves the device."),
         "subhead": (
             "Sit at a table where everyone speaks something else, put your "
-            "AirPods in, and hear it in English. It listens continuously, waits "
+            "AirPods in, and hear it in your own language. It listens continuously, waits "
             "until a thought is complete the way an interpreter does, and "
             "speaks it in your ear while it keeps listening. Recognition, "
             "translation and the voice all run on the phone or Mac in front of "
             "you."),
         "stats": [
-            "<b>25</b> languages heard, any into English",
+            "<b>25</b> languages heard, <b>8</b> spoken",
             "<b>~4–5 s</b> behind the speaker",
             "<b>0</b> bytes of speech leave the device",
         ],
@@ -177,12 +192,18 @@ PAGE = {
                 ]},
                 {"kind": "heading", "text": "When it falls behind"},
                 {"kind": "prose", "text": [
-                    "Speech does not wait for the interpreter. Once more than "
-                    "a second and a half of English is queued, the next "
-                    "translation is asked to be brief and the voice speeds up, "
-                    "to at most 1.3 times. Pieces that pile up while it is busy "
-                    "go out together as one translation rather than one after "
-                    "another.",
+                    "Speech does not wait for the interpreter, and people speak "
+                    "unevenly: they pause for effect, think aloud, build up "
+                    "slowly. That is meant to queue, not be cut; the pauses are "
+                    "context for the next piece. Pieces that pile up while it is "
+                    "busy go out together as one translation, and once a second "
+                    "of speech is queued the voice speeds up, to at most 1.3 "
+                    "times. Everything is translated in full.",
+                    "Some listeners would rather keep up than hear all of a long "
+                    "story. <b>Summarise to keep up</b>, off unless chosen, says "
+                    "only the gist once the interpreter is behind: "
+                    "<em>“complaining about back pain and their boss.”</em> It "
+                    "needs a translator that takes instructions, Qwen or Gemma 4.",
                 ]},
             ],
         },
@@ -235,6 +256,54 @@ PAGE = {
             ],
         },
         {
+            "id": "voice",
+            "jump": "The voice",
+            "eyebrow": "The voice",
+            "heading": "One voice, eight languages, 64 MB",
+            "blocks": [
+                {"kind": "prose", "class": "lede", "text": [
+                    "The interpreter speaks with snepssen: one small Piper voice "
+                    "that speaks English, Polish, Hungarian, German, Dutch, "
+                    "French, Spanish and Italian as the same character, "
+                    "whispery, tired and steady, rendering a sentence in "
+                    "milliseconds on the device.",
+                ]},
+                {"kind": "prose", "text": [
+                    "It began as an English voice. Its other languages were "
+                    "taught from speech generated with the same vocal profile, "
+                    "read from scripts written for each language's hard sounds, "
+                    "cut, checked line by line and trained together. Sounds the "
+                    "phonemizer gets wrong, Polish hard <em>dz</em>, Hungarian "
+                    "silent <em>h</em>, or shares across languages that say them "
+                    "differently, German, Dutch and Italian <em>r</em>, are "
+                    "corrected before the voice sees them, by "
+                    "<a href=\"https://github.com/snepssen/voice-polyglot\">voice-polyglot</a>'s "
+                    "Polyphon; the apps carry a port of it held to the original "
+                    "symbol for symbol. Each language plays at its own pace, "
+                    "picked by ear, since the new languages were read faster "
+                    "than the English.",
+                    "<b>It is still training.</b> Native listeners understood its "
+                    "Polish and Hungarian; German and Dutch sound native enough "
+                    "to be rushed. A better-trained voice is a rebuild away.",
+                ]},
+                {"kind": "heading", "text": "Snepssen interpreting snepssen"},
+                {"kind": "prose", "text": [
+                    "The voice also makes the test speech. Each language is "
+                    "spoken by snepssen, heard by the app's speech recognition "
+                    "and interpreted into another, which tests the whole chain "
+                    "and how legible the voice is at once:",
+                ]},
+                {"kind": "raw", "html": ROUND_TRIP},
+                {"kind": "prose", "class": "caption", "text": [
+                    "TranslateGemma, in real time on an M1 Mac, a halting "
+                    "announcement or a fluent one per language. The misses that "
+                    "mattered were clock times: <em>fél tizenegykor</em> heard "
+                    "wrong became the wrong time in German. That is the next "
+                    "thing to make safe.",
+                ]},
+            ],
+        },
+        {
             "id": "models",
             "jump": "Models",
             "eyebrow": "Models",
@@ -250,9 +319,8 @@ PAGE = {
                 ]},
                 {"kind": "raw", "html": MODELS},
                 {"kind": "prose", "class": "caption", "text": [
-                    "The voice is <a href=\"https://snepssen.github.io/voice-forge/\">"
-                    "Voice Forge</a>'s Piper voice, through the same espeak-ng "
-                    "phonemes it was trained on.",
+                    "Into English, TranslateGemma's is the most natural; into "
+                    "Polish and Hungarian the comparison is still to be made.",
                 ]},
             ],
         },
@@ -277,10 +345,15 @@ PAGE = {
                              "stays awake while live. The moon turns it black "
                              "but for the last line and a Stop button."},
                     {"title": "Any language, or only these", "formats": "iPhone · Mac",
-                     "note": "Everything that isn't English is translated. "
+                     "note": "Everything that isn't your language is translated. "
                              "Naming the languages at the table instead makes "
                              "a misheard Russian for a Polish speaker stay "
                              "quiet."},
+                    {"title": "Into your language", "formats": "iPhone · Mac",
+                     "note": "Pick the language you hear: any of the voice's "
+                             "eight. What is already in it is shown and kept "
+                             "as context, not spoken. Untrained languages, "
+                             "with an accent, are behind a setting."},
                 ]},
             ],
         },
@@ -293,9 +366,18 @@ PAGE = {
                 {"kind": "prose", "text": [
                     "There is no App Store build. The apps need an Apple silicon "
                     "Mac with macOS 14, or an iPhone with 8 GB of memory, and "
-                    "Xcode to build them. The voice comes from "
+                    "Xcode to build them. espeak-ng's data comes from "
                     "<a href=\"https://github.com/snepssen/voice-forge\">voice-forge</a>, "
-                    "cloned beside this repository.",
+                    "cloned beside this repository, and the voice from "
+                    "<a href=\"https://github.com/snepssen/voice-polyglot\">voice-polyglot</a>. "
+                    "Everything to build them is here: the app's source and "
+                    "build scripts, and in voice-polyglot the whole pipeline "
+                    "the voice was made with, from the scripts it read to "
+                    "training and export. The voice itself is fetched by the "
+                    "build from voice-polyglot's "
+                    "<a href=\"https://github.com/snepssen/voice-polyglot/releases\">releases</a>, "
+                    "the newest one each time: <b>still in training</b>, marked "
+                    "with an asterisk and the epoch it was exported at.",
                 ]},
                 {"kind": "raw", "html": """  <pre class="code"><span class="c"># beside each other</span>
 git clone https://github.com/snepssen/voice-forge
@@ -310,6 +392,58 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
                     "in <span class=\"mono\">apple/iOS/project.yml</span>. The "
                     "first launch downloads speech recognition and the "
                     "translator you choose — about 3 GB, best on Wi-Fi.",
+                ]},
+            ],
+        },
+        {
+            "id": "roadmap",
+            "jump": "Roadmap",
+            "eyebrow": "Where it is going",
+            "heading": "Roadmap",
+            "blocks": [
+                {"kind": "prose", "class": "lede", "text": [
+                    "The goal does not change: be included in a conversation "
+                    "you would otherwise sit out, in your own language, with "
+                    "nothing leaving your device.",
+                ]},
+                {"kind": "cards", "cards": [
+                    {"title": "Finish training the voice", "formats": "now",
+                     "note": "Three to four days of training, a check-in every "
+                             "25 epochs, until the voice is indistinguishable "
+                             "by ear; the apps pick up each better export."},
+                    {"title": "Safe numbers", "formats": "next",
+                     "note": "A clock time or number recognition was unsure of "
+                             "is asked about, not spoken: the wrong time said "
+                             "with confidence is the worst mistake it makes."},
+                    {"title": "Real rooms", "formats": "next",
+                     "note": "Many voices, crosstalk, a noisy kitchen: the "
+                             "70-minute recording rerun after every large "
+                             "change, and new ones in other languages."},
+                    {"title": "A translator per language", "formats": "next",
+                     "note": "TranslateGemma, Qwen and Gemma 4 compared into "
+                             "Polish and Hungarian, not only English, and the "
+                             "best chosen for each."},
+                    {"title": "Timing word by word", "formats": "later",
+                     "note": "Voice Forge's per-word duration control in the "
+                             "polyglot voice, for the odd phrase that still "
+                             "rushes inside a sentence."},
+                    {"title": "One engine, shared", "formats": "later",
+                     "note": "Voice Forge, voice-polyglot and this app each "
+                             "fetching the latest of the others, instead of "
+                             "keeping copies."},
+                    {"title": "Android", "formats": "later",
+                     "note": "The voice and phonemizer already run there; "
+                             "recognition and translation have Android "
+                             "runtimes. As phones gain memory, the room for a "
+                             "better translator grows with them."},
+                    {"title": "The App Store", "formats": "when permitted",
+                     "note": "Publishing depends on the permission of everyone "
+                             "whose work is inside: espeak-ng and Piper are "
+                             "GPL, and the voice was trained on speech "
+                             "generated with Suno. This app is the working "
+                             "demonstration that request will rest on. Until "
+                             "then it is what it is today: open source, built "
+                             "from source."},
                 ]},
             ],
         },
@@ -329,9 +463,10 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
                     "Recognition can invent words from faint speech or noise, "
                     "and it covers 25 European languages; Norwegian and the "
                     "rest need Whisper, which is about ten times slower. It "
-                    "translates into English only — any language into any other "
-                    "is the next step, not this one. On the iPhone it works "
-                    "only while the app is open.",
+                    "speaks eight languages well; others only through a "
+                    "setting, with an accent. Into languages other than English "
+                    "the translators are less tested, and Qwen's Polish is "
+                    "rough. On the iPhone it works only while the app is open.",
                     "It is still being tested in the field. The numbers above "
                     "are from recordings and one kitchen table, not from many "
                     "people in many rooms.",

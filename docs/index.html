@@ -6,9 +6,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Interpreter — live interpreting on your own device</title>
-<meta name="description" content="Live interpretation into English that waits for a complete thought, like a human interpreter, and runs entirely on a Mac or an iPhone.">
+<meta name="description" content="Live interpretation that waits for a complete thought, like a human interpreter, and speaks it in your language, entirely on a Mac or an iPhone.">
 <meta property="og:title" content="Interpreter — live interpreting on your own device">
-<meta property="og:description" content="Polish, Hungarian, German or any of 25 languages around you, in English in your ear a few seconds later. Nothing leaves the device.">
+<meta property="og:description" content="Any of 25 languages around you, in English, Polish, Hungarian, German, Dutch, French, Spanish or Italian in your ear a few seconds later. Nothing leaves the device.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://snepssen.github.io/translate-core/">
 <meta property="og:image" content="https://snepssen.github.io/translate-core/preview.png">
@@ -119,9 +119,9 @@
 <header id="top">
   <span class="badge"><span class="dot"></span>macOS · iPhone · on-device</span>
   <h1>Interpreter</h1>
-  <p class="subhead">Sit at a table where everyone speaks something else, put your AirPods in, and hear it in English. It listens continuously, waits until a thought is complete the way an interpreter does, and speaks it in your ear while it keeps listening. Recognition, translation and the voice all run on the phone or Mac in front of you.</p>
+  <p class="subhead">Sit at a table where everyone speaks something else, put your AirPods in, and hear it in your own language. It listens continuously, waits until a thought is complete the way an interpreter does, and speaks it in your ear while it keeps listening. Recognition, translation and the voice all run on the phone or Mac in front of you.</p>
   <div class="headmeta">
-    <span><b>25</b> languages heard, any into English</span>
+    <span><b>25</b> languages heard, <b>8</b> spoken</span>
     <span><b>~4–5 s</b> behind the speaker</span>
     <span><b>0</b> bytes of speech leave the device</span>
   </div>
@@ -136,9 +136,11 @@
       <li><a href="#how">How it cuts</a></li>
       <li><a href="#run">A run</a></li>
       <li><a href="#conversation">Real talk</a></li>
+      <li><a href="#voice">The voice</a></li>
       <li><a href="#models">Models</a></li>
       <li><a href="#apps">The apps</a></li>
       <li><a href="#get">Get it</a></li>
+      <li><a href="#roadmap">Roadmap</a></li>
       <li><a href="#limits">Limits</a></li>
       <li><a href="#contact">Contact</a></li>
     </ul>
@@ -195,7 +197,8 @@
   <p>Every half second the uncommitted tail of speech is transcribed again, and words count as settled once two passes agree on them. A piece is cut at the end of a sentence that speech has carried on past, at a pause long enough for this speaker, or at a comma once it has run four seconds. At five it is cut wherever it can be, and at six wherever it stands; the next piece picks up the sentence.</p>
   <p>A general model such as Qwen is also asked, in a single forward pass, whether the words so far can be translated yet. That is why it speaks sooner in quick conversation: it can cut at <em>“Nie wiem, czy zdążymy na pociąg.”</em> and hold at <em>“Nie wiem, czy.”</em> TranslateGemma cannot be asked, so it relies on the rules alone, and translates better.</p>
   <h3>When it falls behind</h3>
-  <p>Speech does not wait for the interpreter. Once more than a second and a half of English is queued, the next translation is asked to be brief and the voice speeds up, to at most 1.3 times. Pieces that pile up while it is busy go out together as one translation rather than one after another.</p>
+  <p>Speech does not wait for the interpreter, and people speak unevenly: they pause for effect, think aloud, build up slowly. That is meant to queue, not be cut; the pauses are context for the next piece. Pieces that pile up while it is busy go out together as one translation, and once a second of speech is queued the voice speeds up, to at most 1.3 times. Everything is translated in full.</p>
+  <p>Some listeners would rather keep up than hear all of a long story. <b>Summarise to keep up</b>, off unless chosen, says only the gist once the interpreter is behind: <em>“complaining about back pain and their boss.”</em> It needs a translator that takes instructions, Qwen or Gemma 4.</p>
 </section>
 
 <section id="run">
@@ -242,6 +245,30 @@
   </ul>
 </section>
 
+<section id="voice">
+  <p class="eyebrow">The voice</p>
+  <h2>One voice, eight languages, 64 MB</h2>
+  <p class="lede">The interpreter speaks with snepssen: one small Piper voice that speaks English, Polish, Hungarian, German, Dutch, French, Spanish and Italian as the same character, whispery, tired and steady, rendering a sentence in milliseconds on the device.</p>
+  <p>It began as an English voice. Its other languages were taught from speech generated with the same vocal profile, read from scripts written for each language's hard sounds, cut, checked line by line and trained together. Sounds the phonemizer gets wrong, Polish hard <em>dz</em>, Hungarian silent <em>h</em>, or shares across languages that say them differently, German, Dutch and Italian <em>r</em>, are corrected before the voice sees them, by <a href="https://github.com/snepssen/voice-polyglot">voice-polyglot</a>'s Polyphon; the apps carry a port of it held to the original symbol for symbol. Each language plays at its own pace, picked by ear, since the new languages were read faster than the English.</p>
+  <p><b>It is still training.</b> Native listeners understood its Polish and Hungarian; German and Dutch sound native enough to be rushed. A better-trained voice is a rebuild away.</p>
+  <h3>Snepssen interpreting snepssen</h3>
+  <p>The voice also makes the test speech. Each language is spoken by snepssen, heard by the app's speech recognition and interpreted into another, which tests the whole chain and how legible the voice is at once:</p>
+  <table>
+    <thead><tr><th>Snepssen speaks</th><th>Interpreted into</th><th>Words recognition heard right</th></tr></thead>
+    <tbody>
+      <tr><td>French</td><td>Italian</td><td>94%</td></tr>
+      <tr><td>English</td><td>Polish</td><td>92%</td></tr>
+      <tr><td>Dutch</td><td>Spanish</td><td>90%</td></tr>
+      <tr><td>Spanish</td><td>Dutch</td><td>90%</td></tr>
+      <tr><td>German</td><td>Hungarian</td><td>86%</td></tr>
+      <tr><td>Italian</td><td>French</td><td>86%</td></tr>
+      <tr><td>Hungarian</td><td>German</td><td>85%</td></tr>
+      <tr><td>Polish</td><td>English</td><td>82%</td></tr>
+    </tbody>
+  </table>
+  <p class="caption">TranslateGemma, in real time on an M1 Mac, a halting announcement or a fluent one per language. The misses that mattered were clock times: <em>fél tizenegykor</em> heard wrong became the wrong time in German. That is the next thing to make safe.</p>
+</section>
+
 <section id="models">
   <p class="eyebrow">Models</p>
   <h2>Choose the translator; it downloads once</h2>
@@ -262,7 +289,7 @@
       <tr><td>Whisper large-v3 Turbo</td><td>100, Norwegian among them</td><td>2.42 s</td></tr>
     </tbody>
   </table>
-  <p class="caption">The voice is <a href="https://snepssen.github.io/voice-forge/">Voice Forge</a>'s Piper voice, through the same espeak-ng phonemes it was trained on.</p>
+  <p class="caption">Into English, TranslateGemma's is the most natural; into Polish and Hungarian the comparison is still to be made.</p>
 </section>
 
 <section id="apps">
@@ -272,14 +299,15 @@
     <div class="card"><h3>Headphone microphone</h3><p class="mono">iPhone · iOS 26+</p><p>AirPods sit closer to the people talking than a phone in a pocket. Recorded in full quality where they support it, and asked to hear the whole room rather than mainly you.</p></div>
     <div class="card"><h3>Captions only</h3><p class="mono">iPhone · Mac</p><p>For a phone on the table when nobody has headphones: translations on screen, nothing spoken over the room.</p></div>
     <div class="card"><h3>A dark screen</h3><p class="mono">iPhone</p><p>Interpreting is foreground-only, so the screen stays awake while live. The moon turns it black but for the last line and a Stop button.</p></div>
-    <div class="card"><h3>Any language, or only these</h3><p class="mono">iPhone · Mac</p><p>Everything that isn't English is translated. Naming the languages at the table instead makes a misheard Russian for a Polish speaker stay quiet.</p></div>
+    <div class="card"><h3>Any language, or only these</h3><p class="mono">iPhone · Mac</p><p>Everything that isn't your language is translated. Naming the languages at the table instead makes a misheard Russian for a Polish speaker stay quiet.</p></div>
+    <div class="card"><h3>Into your language</h3><p class="mono">iPhone · Mac</p><p>Pick the language you hear: any of the voice's eight. What is already in it is shown and kept as context, not spoken. Untrained languages, with an accent, are behind a setting.</p></div>
   </div>
 </section>
 
 <section id="get">
   <p class="eyebrow">Getting it</p>
   <h2>Built from source, for now</h2>
-  <p>There is no App Store build. The apps need an Apple silicon Mac with macOS 14, or an iPhone with 8 GB of memory, and Xcode to build them. The voice comes from <a href="https://github.com/snepssen/voice-forge">voice-forge</a>, cloned beside this repository.</p>
+  <p>There is no App Store build. The apps need an Apple silicon Mac with macOS 14, or an iPhone with 8 GB of memory, and Xcode to build them. espeak-ng's data comes from <a href="https://github.com/snepssen/voice-forge">voice-forge</a>, cloned beside this repository, and the voice from <a href="https://github.com/snepssen/voice-polyglot">voice-polyglot</a>. Everything to build them is here: the app's source and build scripts, and in voice-polyglot the whole pipeline the voice was made with, from the scripts it read to training and export. The voice itself is fetched by the build from voice-polyglot's <a href="https://github.com/snepssen/voice-polyglot/releases">releases</a>, the newest one each time: <b>still in training</b>, marked with an asterisk and the epoch it was exported at.</p>
   <pre class="code"><span class="c"># beside each other</span>
 git clone https://github.com/snepssen/voice-forge
 git clone https://github.com/snepssen/translate-core
@@ -291,11 +319,27 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
   <p>The iPhone build signs with your own development team, set in <span class="mono">apple/iOS/project.yml</span>. The first launch downloads speech recognition and the translator you choose — about 3 GB, best on Wi-Fi.</p>
 </section>
 
+<section id="roadmap">
+  <p class="eyebrow">Where it is going</p>
+  <h2>Roadmap</h2>
+  <p class="lede">The goal does not change: be included in a conversation you would otherwise sit out, in your own language, with nothing leaving your device.</p>
+  <div class="cards">
+    <div class="card"><h3>Finish training the voice</h3><p class="mono">now</p><p>Three to four days of training, a check-in every 25 epochs, until the voice is indistinguishable by ear; the apps pick up each better export.</p></div>
+    <div class="card"><h3>Safe numbers</h3><p class="mono">next</p><p>A clock time or number recognition was unsure of is asked about, not spoken: the wrong time said with confidence is the worst mistake it makes.</p></div>
+    <div class="card"><h3>Real rooms</h3><p class="mono">next</p><p>Many voices, crosstalk, a noisy kitchen: the 70-minute recording rerun after every large change, and new ones in other languages.</p></div>
+    <div class="card"><h3>A translator per language</h3><p class="mono">next</p><p>TranslateGemma, Qwen and Gemma 4 compared into Polish and Hungarian, not only English, and the best chosen for each.</p></div>
+    <div class="card"><h3>Timing word by word</h3><p class="mono">later</p><p>Voice Forge's per-word duration control in the polyglot voice, for the odd phrase that still rushes inside a sentence.</p></div>
+    <div class="card"><h3>One engine, shared</h3><p class="mono">later</p><p>Voice Forge, voice-polyglot and this app each fetching the latest of the others, instead of keeping copies.</p></div>
+    <div class="card"><h3>Android</h3><p class="mono">later</p><p>The voice and phonemizer already run there; recognition and translation have Android runtimes. As phones gain memory, the room for a better translator grows with them.</p></div>
+    <div class="card"><h3>The App Store</h3><p class="mono">when permitted</p><p>Publishing depends on the permission of everyone whose work is inside: espeak-ng and Piper are GPL, and the voice was trained on speech generated with Suno. This app is the working demonstration that request will rest on. Until then it is what it is today: open source, built from source.</p></div>
+  </div>
+</section>
+
 <section id="limits">
   <p class="eyebrow">Honesty</p>
   <h2>What it is not</h2>
   <p><b>It is not a certified interpreter</b>, and should not be relied on where a mistranslation costs more than a repeated question: a doctor, a contract, a police station. A 4B model gets most things right and some things confidently wrong, and short or garbled phrases are where it goes wrong most.</p>
-  <p>Recognition can invent words from faint speech or noise, and it covers 25 European languages; Norwegian and the rest need Whisper, which is about ten times slower. It translates into English only — any language into any other is the next step, not this one. On the iPhone it works only while the app is open.</p>
+  <p>Recognition can invent words from faint speech or noise, and it covers 25 European languages; Norwegian and the rest need Whisper, which is about ten times slower. It speaks eight languages well; others only through a setting, with an accent. Into languages other than English the translators are less tested, and Qwen's Polish is rough. On the iPhone it works only while the app is open.</p>
   <p>It is still being tested in the field. The numbers above are from recordings and one kitchen table, not from many people in many rooms.</p>
 </section>
 
