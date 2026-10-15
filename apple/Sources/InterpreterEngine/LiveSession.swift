@@ -441,8 +441,11 @@ public final class LiveSession {
             audioObservers.append(NotificationCenter.default.addObserver(
                 forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) {
                 [weak self] _ in
+                // Read on the main queue, where this is delivered: the engine
+                // itself is not Sendable and stays out of the task.
+                let isRunning = engine.isRunning
                 Task { @MainActor in
-                    self?.audioChanged(.engineConfiguration(owned: true, isRunning: engine.isRunning),
+                    self?.audioChanged(.engineConfiguration(owned: true, isRunning: isRunning),
                                        generation: generation)
                 }
             })

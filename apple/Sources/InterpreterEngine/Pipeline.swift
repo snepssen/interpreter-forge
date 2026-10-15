@@ -173,8 +173,8 @@ public final class Pipeline: @unchecked Sendable {
 
     /// Wait until a recording has been heard to the end and everything in it said.
     public func finish() async {
-        let tasks = control.withLock { tasks }
-        for task in tasks { await task.value }
+        let running = control.withLock { self.tasks }
+        for task in running { await task.value }
     }
 
     private func fail(_ message: String, _ events: @Sendable (PipelineEvent) -> Void) {
