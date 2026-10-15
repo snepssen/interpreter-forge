@@ -16,6 +16,13 @@ public struct TranslationModel: Identifiable, Hashable, Sendable {
         /// TranslateGemma: its own template, told the source language, no
         /// instructions; not asked anything but translations.
         case translateGemma
+        /// EuroLLM: its own translation format from its training, told the
+        /// source language, one piece at a time. Given our interpreter
+        /// instructions it echoed them, answered questions instead of
+        /// translating them and remarked on the sentence; in its own format
+        /// it translates. Not asked anything but translations: it judged 9
+        /// of 17 complete thoughts.
+        case euroLLM
     }
 
     public struct File: Hashable, Sendable {
@@ -79,6 +86,26 @@ public enum ModelCatalog {
     // error in 26, natural English, times as digits) but needs 4.7 GB: a 12 GB
     // iPhone or a Mac. E2B is the fastest (0.6 s a line) and the roughest (five
     // errors). Both judge less well than Qwen (13 and 12 of 17).
+    // EuroLLM-1.7B-Instruct (utter-project, Apache-2.0): trained for the 24 EU
+    // languages and instruction-tuned for translation, 0.93 GB, peak 1.1-1.4 GB
+    // on a Mac. The only one that fits a 4 GB iPhone (13, 13 mini). Measured
+    // 2026-10-15 in its own format: about 4 meaning errors in 21 lines into
+    // English where TranslateGemma made 1, and into Hungarian and Polish about
+    // two in three lines kept their meaning. The gist, for a phone that can
+    // run nothing bigger. jevoma4362's MLX conversion, pinned: dequantised,
+    // it is exactly as close to the official weights as our own conversion
+    // with mlx-lm 0.32 (median error ratio 1.0000; the bytes differ only in
+    // values on a rounding boundary).
+    static let euroLLM = TranslationModel(
+        id: "eurollm-1.7b-instruct-4bit", name: "EuroLLM 1.7B", tagline: "For 4 GB iPhones",
+        summary: "A small European model for phones with 4 GB, like the iPhone 13: rougher translations, the gist rather than every word, in the 24 EU languages. It can't judge when a thought is complete or summarise.",
+        repo: "jevoma4362/EuroLLM-1.7B-Instruct-mlx-4Bit", revision: "6564fac274047a98b97c54287607626553f5647f",
+        style: .euroLLM, memoryGB: 1.4,
+        files: [.init(name: "chat_template.jinja", size: 424), .init(name: "config.json", size: 917),
+                .init(name: "generation_config.json", size: 132), .init(name: "model.safetensors.index.json", size: 39380),
+                .init(name: "tokenizer.json", size: 15_783_363), .init(name: "tokenizer_config.json", size: 416),
+                .init(name: "model.safetensors", size: 932_185_251)])
+
     static let gemma4: [TranslationModel] = [
         TranslationModel(
             id: "gemma-4-e4b-it-4bit", name: "Gemma 4 E4B", tagline: "Near-best, speaks sooner",
@@ -100,7 +127,7 @@ public enum ModelCatalog {
                     .init(name: "tokenizer_config.json", size: 2740), .init(name: "model.safetensors", size: 3_550_670_554)]),
     ]
 
-    public static var all: [TranslationModel] { translation + gemma4 }
+    public static var all: [TranslationModel] { translation + gemma4 + [euroLLM] }
 
     public static let recommended = translation[0]
 

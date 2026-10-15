@@ -178,6 +178,12 @@ public actor Linguist {
                 messages += [turn(piece.source, piece.language), ["role": "assistant", "content": piece.target]]
             }
             return messages + [turn(text, language)]
+        case .euroLLM:
+            // Its training format, one piece at a time: earlier pieces as
+            // context made a model this small echo them.
+            let (from, into) = (Self.name(language), Self.name(target))
+            return [["role": "user",
+                     "content": "Translate the following \(from) source text to \(into):\n\(from): \(text)\n\(into): "]]
         case .instructions:
             var messages: [[String: any Sendable]] = [["role": "system", "content": system]]
             for piece in history {

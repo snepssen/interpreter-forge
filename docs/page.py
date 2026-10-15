@@ -88,6 +88,7 @@ MODELS = """  <table>
       <tr><td>Qwen3 4B</td><td>3</td><td>17 of 17</td><td>2.8 GB</td></tr>
       <tr><td>Gemma 4 E4B</td><td>1</td><td>13 of 17</td><td>4.7 GB — a Mac, or a 12 GB iPhone</td></tr>
       <tr><td>Gemma 4 E2B</td><td>5</td><td>12 of 17</td><td>3.0 GB</td></tr>
+      <tr><td>EuroLLM 1.7B <span class="tag informal">4 GB iPhones</span></td><td>about 4 in 21; the gist</td><td>not asked — 9 of 17</td><td>1.4 GB — fits an iPhone 13</td></tr>
     </tbody>
   </table>
   <table>
