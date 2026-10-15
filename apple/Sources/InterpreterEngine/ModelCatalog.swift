@@ -129,7 +129,18 @@ public enum ModelCatalog {
 
     public static var all: [TranslationModel] { translation + gemma4 + [euroLLM] }
 
-    public static let recommended = translation[0]
+    /// What this device is offered. TranslateGemma's quality is the standard
+    /// and the only way from it is up (owner's rule, 2026-10-15): EuroLLM is
+    /// offered only where none of the others fits, a 4 GB iPhone, and is then
+    /// the one recommended. Elsewhere it appears only once downloaded, so it
+    /// can be deleted.
+    public static var offered: [TranslationModel] {
+        let standard = translation + gemma4
+        if !standard.contains(where: \.fits) { return [euroLLM] }
+        return standard + (ModelStore.isDownloaded(euroLLM) ? [euroLLM] : [])
+    }
+
+    public static var recommended: TranslationModel { translation[0].fits ? translation[0] : offered[0] }
 
     public static func model(_ id: String?) -> TranslationModel? { all.first { $0.id == id } }
 }

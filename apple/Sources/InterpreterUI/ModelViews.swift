@@ -5,7 +5,7 @@ import SwiftUI
 /// translator to download, the others a tap away.
 struct ModelPicker: View {
     let session: LiveSession
-    @State private var showOthers = ModelCatalog.all.contains {
+    @State private var showOthers = ModelCatalog.offered.contains {
         $0 != ModelCatalog.recommended && ModelStore.isDownloaded($0)
     }
 
@@ -31,7 +31,7 @@ struct ModelPicker: View {
             .panel(tint: .accentColor)
             DisclosureGroup("Other models", isExpanded: $showOthers) {
                 VStack(alignment: .leading, spacing: 18) {
-                    ForEach(ModelCatalog.all.filter { $0 != recommended }) { model in
+                    ForEach(ModelCatalog.offered.filter { $0 != recommended }) { model in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(alignment: .firstTextBaseline) {
                                 Text(model.name).font(.headline)

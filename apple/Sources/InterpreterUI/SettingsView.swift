@@ -22,7 +22,7 @@ public struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    ForEach(ModelCatalog.all) { model in
+                    ForEach(ModelCatalog.offered) { model in
                         NavigationLink(value: model) { TranslatorRow(session: session, model: model) }
                     }
                 } header: {
