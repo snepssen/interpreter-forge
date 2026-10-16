@@ -22,5 +22,6 @@ done
 adb push -q ../models/android/silero_vad_v5.onnx $TMP/
 adb push -q ../samples/snep_*.wav ../samples/snep_*.txt $TMP/samples/
 adb shell run-as $PKG sh -c "'mkdir -p files && cp -r $TMP/parakeet $TMP/samples $TMP/silero_vad_v5.onnx files/'"
+adb shell rm -rf $TMP  # two copies of Parakeet fill an emulator
 adb shell am instrument -w -e class com.snepssen.hearing.HearingTest $PKG/androidx.test.runner.AndroidJUnitRunner | tail -3
 adb shell run-as $PKG cat files/hearing-report.txt
