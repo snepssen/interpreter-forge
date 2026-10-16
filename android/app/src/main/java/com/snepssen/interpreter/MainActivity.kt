@@ -27,6 +27,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.snepssen.engine.Recording
+import com.snepssen.engine.Wav
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     private val session: Session by viewModels()
@@ -60,6 +63,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun live() {
+        // A debug build can be handed a recording to interpret as if it were
+        // the microphone, a WAV in its files' demo folder (scripts/demo-app.sh).
+        val recording = intent.getStringExtra("recording")?.takeIf { BuildConfig.DEBUG }
+        if (recording != null) {
+            runCatching { Recording(Wav.read16k(File(filesDir, "demo/$recording"))) }
+                .onSuccess { session.start(it) }
+                .onFailure { session.notice = "Couldn't read $recording: ${it.message}" }
+            return
+        }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) session.start()
         else microphone.launch(Manifest.permission.RECORD_AUDIO)
     }

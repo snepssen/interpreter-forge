@@ -137,7 +137,7 @@ fun SettingsScreen(session: Session, onDone: () -> Unit) {
             }
             Footer("Speech, translations and models stay on this phone.")
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-            Footer("The voice is snepssen's, trained on espeak-ng (GPL-3.0). Speech recognition: Parakeet Ultra " +
+            Footer("The voice: snepssen, a Piper voice reading through espeak-ng (GPL-3.0). Speech recognition: Parakeet Ultra " +
                    "(moondream, CC-BY-4.0). Translation: TranslateGemma (Google, Gemma terms) or EuroLLM " +
                    "(UTTER, Apache-2.0), on llama.cpp (MIT).")
         }

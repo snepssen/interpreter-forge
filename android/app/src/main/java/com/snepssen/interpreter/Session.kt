@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.snepssen.core.Languages
+import com.snepssen.engine.AudioSource
 import com.snepssen.engine.Bundled
 import com.snepssen.engine.Hearing
 import com.snepssen.engine.LanguageDetector
@@ -250,14 +251,14 @@ class Session(application: Application) : AndroidViewModel(application) {
 
     // live
 
-    /** The caller has the microphone permission. */
-    fun start() {
+    /** The caller has the microphone permission, unless `source` is a recording (a debug build's demo). */
+    fun start(source: AudioSource = Microphone()) {
         val recognizer = recognizer; val linguist = linguist; val voice = voice
         if (phase != Phase.Ready || busy || recognizer == null || linguist == null || voice == null) return
         linguist.forget()
         val pipeline = Pipeline(recognizer, linguist, voice, Bundled.vad(context))
         try {
-            pipeline.start(Microphone(), audible = true) { event ->
+            pipeline.start(source, audible = true) { event ->
                 viewModelScope.launch { if (this@Session.pipeline === pipeline) apply(event) }
             }
         } catch (e: Exception) {
@@ -308,7 +309,8 @@ class Session(application: Application) : AndroidViewModel(application) {
             is PipelineEvent.Hearing -> hearing = event.text
             is PipelineEvent.Committed -> {
                 lineIDs[event.segment.index] = nextLineID
-                lines += Line(nextLineID, event.segment.text, language = language(event.segment.text))
+                lines += Line(nextLineID, event.segment.text)
+                label(nextLineID, event.segment.text)
                 nextLineID++
             }
             is PipelineEvent.Silent -> update(lineIDs[event.index] ?: return) {
@@ -323,9 +325,9 @@ class Session(application: Application) : AndroidViewModel(application) {
                 lines.removeAll { it.id in ids.drop(1) }
                 update(first) {
                     val source = (listOf(it.source) + merged).joinToString(" ")
-                    it.copy(source = source, language = language(source) ?: it.language, translation = event.translation,
-                            lag = event.lags.maxOrNull(), pace = event.pace)
+                    it.copy(source = source, translation = event.translation, lag = event.lags.maxOrNull(), pace = event.pace)
                 }
+                if (merged.isNotEmpty()) label(first, lines.first { it.id == first }.source)
             }
             is PipelineEvent.Failed -> {
                 stop()
@@ -335,8 +337,15 @@ class Session(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** A label, not a decision: short replies ("Igen") get no chip rather than a wrong one. */
-    private fun language(text: String) = detector.guess(text)?.takeIf { it.confidence >= 0.6 }?.code
+    /**
+     * Who spoke a line, for its chip: a label, not a decision. Short replies
+     * ("Igen") get no chip rather than a wrong one. The detector is asked off
+     * the main thread, as Android requires.
+     */
+    private fun label(id: Int, text: String) = viewModelScope.launch {
+        val code = withContext(Dispatchers.Default) { detector.guess(text)?.takeIf { it.confidence >= 0.6 }?.code }
+        if (code != null) update(id) { if (it.silence == Silence.UNDERSTOOD) it else it.copy(language = code) }
+    }
 
     private fun update(id: Int, change: (Line) -> Line) {
         val i = lines.indexOfLast { it.id == id }

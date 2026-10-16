@@ -16,7 +16,7 @@ android {
         versionName = "0.1"
         ndk { abiFilters += "arm64-v8a" }
     }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
     packaging {
         // Only 64-bit ARM ships; sherpa-onnx's x86 slice carries its own ONNX Runtime.
         // llama.cpp's CPU variants are loaded from the native library folder.

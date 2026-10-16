@@ -67,14 +67,15 @@ import kotlin.math.sqrt
 fun InterpreterScreen(session: Session, onLive: () -> Unit, onSettings: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically) {
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             LanguageMenu(session, locked = session.isLive || session.busy, modifier = Modifier.weight(1f, fill = false))
-            Spacer(Modifier.weight(1f))
             IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, contentDescription = "Settings") }
         }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { Content(session) }
-        HorizontalDivider()
-        Controls(session, onLive)
+        if (session.phase != Session.Phase.ChoosingModel) {
+            HorizontalDivider()
+            Controls(session, onLive)
+        }
     }
 }
 
