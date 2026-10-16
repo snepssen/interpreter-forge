@@ -48,9 +48,11 @@ class MainActivity : ComponentActivity() {
             val colors = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             MaterialTheme(colorScheme = colors) {
                 var settings by rememberSaveable { mutableStateOf(false) }
-                // Interpreting is foreground-only: the screen stays on while live.
-                LaunchedEffect(session.isLive) {
-                    if (session.isLive) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                // Interpreting is foreground-only: the screen stays on while live,
+                // and while models download (a sleeping phone may drop its Wi-Fi).
+                val awake = session.isLive || session.downloads.isNotEmpty() || session.hearingDownload != null
+                LaunchedEffect(awake) {
+                    if (awake) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
                 BackHandler(enabled = settings) { settings = false }
@@ -74,6 +76,11 @@ class MainActivity : ComponentActivity() {
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) session.start()
         else microphone.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    override fun onStart() {
+        super.onStart()
+        session.resumed()
     }
 
     override fun onStop() {

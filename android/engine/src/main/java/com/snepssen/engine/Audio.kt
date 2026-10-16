@@ -63,6 +63,8 @@ interface AudioSource {
     fun stop()
     /** A recording that has played to its end; a microphone never is. */
     val finished: Boolean
+    /** Why the source stopped delivering audio, if it did. */
+    val failure: String? get() = null
 }
 
 /** A recording played in at the pace it was spoken: the live loop, with the same contention, for measuring without a microphone. */
@@ -117,16 +119,26 @@ class Microphone : AudioSource {
             throw AudioFailure("The microphone isn't delivering audio. Allow Interpreter to use it in Settings → Apps → Interpreter → Permissions.")
         }
         record.startRecording()
+        if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+            record.release()
+            throw AudioFailure("The microphone is in use by another app, or a call. Try again when it's free.")
+        }
         this.record = record
         running = true
         worker = thread(name = "microphone", priority = Thread.MAX_PRIORITY) {
             val block = FloatArray(1_600)  // 100 ms
             while (running) {
                 val n = record.read(block, 0, block.size, AudioRecord.READ_BLOCKING)
-                if (n > 0) buffer.append(block, n) else if (n < 0) break
+                if (n > 0) buffer.append(block, n)
+                else if (n < 0) {
+                    if (running) failure = "The microphone stopped delivering audio (error $n). Press Live to try again."
+                    break
+                }
             }
         }
     }
+
+    @Volatile override var failure: String? = null; private set
 
     override fun stop() {
         running = false

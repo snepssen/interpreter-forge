@@ -124,7 +124,14 @@ class Pipeline(
         events(PipelineEvent.Failed(message))
     }
 
-    private companion object { const val TAG = "Pipeline" }
+    private companion object {
+        const val TAG = "Pipeline"
+        /** What went wrong, for the screen: out of memory said plainly, never just a class name. */
+        fun describe(e: Throwable) = when (e) {
+            is OutOfMemoryError -> "this phone ran out of memory. Close other apps, or use EuroLLM."
+            else -> e.message ?: e.javaClass.simpleName
+        }
+    }
 
     // listening
 
@@ -141,6 +148,7 @@ class Pipeline(
             }
         }
         while (isActive) {
+            source.failure?.let { fail(it, events); return }
             val ended = source.finished
             val heard = buffer.count
             try {
@@ -148,8 +156,9 @@ class Pipeline(
                     vad.push(buffer.read(vadAt, vadAt + SileroVad.FRAME), (vadAt + SileroVad.FRAME) / 16_000.0)
                     vadAt += SileroVad.FRAME
                 }
-            } catch (e: Exception) {
-                if (isActive) fail("Detecting speech: ${e.message}", events)
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                fail("Detecting speech: ${describe(e)}", events)
                 return
             }
             val now = heard / 16_000.0
@@ -161,7 +170,7 @@ class Pipeline(
                     commit(segmenter.flush(now, segmenter.newWords(words)))
                     inbox.close()
                 } catch (e: CancellationException) { throw e
-                } catch (e: Exception) { fail("Speech recognition: ${e.message}", events) }
+                } catch (e: Throwable) { fail("Speech recognition: ${describe(e)}", events) }
                 return
             }
             if (now - lastHop < config.hop) { delay(30); continue }
@@ -184,8 +193,8 @@ class Pipeline(
                     segmenter.advanceIdle(now)
                 }
             } catch (e: CancellationException) { throw e
-            } catch (e: Exception) {
-                fail("Speech recognition: ${e.message}", events)
+            } catch (e: Throwable) {
+                fail("Speech recognition: ${describe(e)}", events)
                 return
             }
             buffer.drop(((segmenter.windowStart() - 1) * 16_000).toLong())  // keep a second spare
@@ -237,8 +246,8 @@ class Pipeline(
             } catch (e: UnclearTranslation) {
                 for (segment in foreign) events(PipelineEvent.Silent(segment.index, Silence.UNCLEAR, e.message))
             } catch (e: CancellationException) { throw e
-            } catch (e: Exception) {
-                fail("Interpreting: ${e.message}", events)
+            } catch (e: Throwable) {
+                fail("Interpreting: ${describe(e)}", events)
                 return
             }
         }

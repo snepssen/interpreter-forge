@@ -32,8 +32,11 @@ class Recognizer(modelDirectory: File, threads: Int = 4) : AutoCloseable {
         ),
     )
 
+    private var closed = false
+
     /** Words in `samples` (16 kHz mono), timed in stream seconds from `offset`. */
     @Synchronized fun transcribe(samples: FloatArray, offset: Double): List<Word> {
+        check(!closed) { "Speech recognition was closed." }
         if (samples.size < 16_000 * 3 / 10) return emptyList()
         val stream = recognizer.createStream()
         try {
@@ -49,7 +52,12 @@ class Recognizer(modelDirectory: File, threads: Int = 4) : AutoCloseable {
         } finally { stream.release() }
     }
 
-    override fun close() = recognizer.release()
+    /** Waits for a pass under way; later ones throw rather than reach freed memory. */
+    @Synchronized override fun close() {
+        if (closed) return
+        closed = true
+        recognizer.release()
+    }
 
     data class Token(val text: String, val start: Double, val end: Double)
 

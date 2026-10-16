@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.snepssen.core.Languages
+import com.snepssen.engine.AudioFailure
 import com.snepssen.engine.AudioSource
 import com.snepssen.engine.Bundled
 import com.snepssen.engine.Hearing
@@ -165,6 +166,19 @@ class Session(application: Application) : AndroidViewModel(application) {
     /** Load recognition, translation and voice; download recognition if needed. */
     fun prepare() = viewModelScope.launch { load() }
 
+    /**
+     * A translator being let go. Closing waits for a translation under way,
+     * seconds on a slow phone, so it happens off the main thread; and loading
+     * waits for it, so two models are never in memory at once.
+     */
+    private var releasing: Job? = null
+
+    private fun release(linguist: Linguist?) {
+        linguist ?: return
+        val previous = releasing
+        releasing = viewModelScope.launch(Dispatchers.Default) { previous?.join(); linguist.close() }
+    }
+
     private suspend fun load() {
         if (busy || (phase != Phase.Idle && phase != Phase.ChoosingModel && phase !is Phase.Failed)) return
         val model = translationModel?.takeIf { isDownloaded(it) }
@@ -172,6 +186,7 @@ class Session(application: Application) : AndroidViewModel(application) {
         busy = true
         try {
             withContext(Dispatchers.Default) {
+                releasing?.join()
                 if (!ModelStore.hasHearing(context)) {
                     phase = Phase.Loading("Downloading speech recognition…")
                     hearingDownload = 0.0
@@ -187,7 +202,7 @@ class Session(application: Application) : AndroidViewModel(application) {
                     recognizer = Recognizer(Hearing.parakeetFolder(context), threads = Threads.hearing)
                 }
                 if (linguist?.model != model) {
-                    linguist?.close(); linguist = null  // one translation model in memory at a time
+                    linguist?.close(); linguist = null  // one translation model in memory at a time (off the main thread here)
                     phase = Phase.Loading("Loading ${model.title}…")
                     linguist = Linguist(context, model, ModelStore.location(context, model), spoken, target)
                 }
@@ -201,6 +216,9 @@ class Session(application: Application) : AndroidViewModel(application) {
                 linguist?.warmUp()
             }
             phase = Phase.Ready
+        } catch (e: OutOfMemoryError) {
+            phase = Phase.Failed("This phone ran out of memory loading the models. Close other apps and try again" +
+                                 if (translationModel == TranslationModel.TRANSLATE_GEMMA) ", or use EuroLLM." else ".")
         } catch (e: Exception) {
             phase = Phase.Failed(e.message ?: e.toString())
         } finally {
@@ -231,7 +249,7 @@ class Session(application: Application) : AndroidViewModel(application) {
         if (isLive) stop()
         translationModel = model
         prefs.edit().putString("translationModel", model.name).apply()
-        linguist?.close(); linguist = null
+        release(linguist); linguist = null
         phase = Phase.Idle
         prepare()
     }
@@ -240,7 +258,7 @@ class Session(application: Application) : AndroidViewModel(application) {
         if (busy || model in downloads) return
         if (model == translationModel) {
             if (isLive) stop()
-            linguist?.close(); linguist = null
+            release(linguist); linguist = null
             translationModel = null
             prefs.edit().remove("translationModel").apply()
             phase = Phase.ChoosingModel
@@ -255,15 +273,29 @@ class Session(application: Application) : AndroidViewModel(application) {
     fun start(source: AudioSource = Microphone()) {
         val recognizer = recognizer; val linguist = linguist; val voice = voice
         if (phase != Phase.Ready || busy || recognizer == null || linguist == null || voice == null) return
-        linguist.forget()
+        busy = true
+        viewModelScope.launch {
+            try { begin(source, recognizer, linguist, voice) } finally { busy = false }
+        }
+    }
+
+    private suspend fun begin(source: AudioSource, recognizer: Recognizer, linguist: Linguist, voice: Voice) {
+        // Off the main thread: forgetting waits for the last session's
+        // translation to finish, and opening the audio can take a moment.
         val pipeline = Pipeline(recognizer, linguist, voice, Bundled.vad(context))
-        try {
-            pipeline.start(source, audible = true) { event ->
-                viewModelScope.launch { if (this@Session.pipeline === pipeline) apply(event) }
+        val opened = withContext(Dispatchers.Default) {
+            runCatching {
+                linguist.forget()
+                pipeline.start(source, audible = true) { event ->
+                    viewModelScope.launch { if (this@Session.pipeline === pipeline) apply(event) }
+                }
             }
-        } catch (e: Exception) {
+        }
+        // Left the app while it was starting: don't go live in the background.
+        if (!visible && opened.isSuccess) { pipeline.close(); return }
+        opened.exceptionOrNull()?.let {
             pipeline.close()
-            notice = "Couldn't open the audio: ${e.message}"
+            notice = (it as? AudioFailure)?.message ?: "Couldn't open the audio: ${it.message}"
             return
         }
         this.pipeline = pipeline
@@ -291,8 +323,14 @@ class Session(application: Application) : AndroidViewModel(application) {
         if (phase == Phase.Live) phase = Phase.Ready
     }
 
+    /** Whether the app is on screen; interpreting only happens while it is. */
+    private var visible = true
+
+    fun resumed() { visible = true }
+
     /** Interpreting is foreground-only, as on the iPhone: leaving the app ends it. */
     fun paused() {
+        visible = false
         if (isLive) {
             stop()
             notice = "Interpreter paused. Keep the app open and press Live to restart."
@@ -354,7 +392,9 @@ class Session(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         stop()
-        linguist?.close(); recognizer?.close(); voice?.close()
+        // A translation or pass under way finishes first; anything after throws, harmlessly.
+        val (linguist, recognizer, voice) = Triple(linguist, recognizer, voice)
+        Thread { linguist?.close(); recognizer?.close(); voice?.close() }.start()
     }
 
     companion object {

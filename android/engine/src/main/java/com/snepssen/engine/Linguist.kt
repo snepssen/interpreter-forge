@@ -63,23 +63,35 @@ class Linguist(
         val text = Clock.normalise(text)
         val language = source(text)
         if (history.size >= 2 * contextPieces) repeat(history.size - contextPieces) { history.removeAt(0) }
-        val prompt = when (model) {
-            // A piece kept as context because it was already in the listener's
-            // language can't be "translated" into itself, so only translated pieces go in.
-            TranslationModel.TRANSLATE_GEMMA ->
-                Prompts.translateGemma(history.filter { it.source != target }, language, text, target)
-            // One piece at a time: earlier pieces as context made a model this small echo them.
-            TranslationModel.EURO_LLM -> Prompts.euroLLM(language, text, target)
-        }
         // English seldom needs three times the tokens of its source; a cap keeps
         // an aside from being spoken and the listener from falling behind.
         // Other languages cost a tokenizer more per word than English does.
         val factor = if (target == "en") 3 else 4
         val cap = maxOf(24, factor * llm.tokenize(text).size)
-        val out = spoken(llm.generate(prompt, cap))
+        // Prompt and answer must fit the model's context, or llama.cpp stops
+        // short: earlier pieces go first, then the cap. Pieces queued behind a
+        // slow translation are merged, so one can be long.
+        var context = history.filter { it.source != target }
+        var prompt = prompt(context, language, text)
+        var room = llm.contextSize - llm.tokenize(prompt).size
+        while (room < cap && context.isNotEmpty()) {
+            context = context.drop(1)
+            prompt = prompt(context, language, text)
+            room = llm.contextSize - llm.tokenize(prompt).size
+        }
+        if (room < 16) throw UnclearTranslation("Too much at once to translate. Please say it again in shorter pieces.")
+        val out = spoken(llm.generate(prompt, minOf(cap, room)))
         TranslationQuality.concern(text, out)?.let { throw UnclearTranslation(it) }
         history += Prompts.Piece(language, text, out)
         return out
+    }
+
+    private fun prompt(context: List<Prompts.Piece>, language: String, text: String) = when (model) {
+        // A piece kept as context because it was already in the listener's
+        // language can't be "translated" into itself, so only translated pieces go in.
+        TranslationModel.TRANSLATE_GEMMA -> Prompts.translateGemma(context, language, text, target)
+        // One piece at a time: earlier pieces as context made a model this small echo them.
+        TranslationModel.EURO_LLM -> Prompts.euroLLM(language, text, target)
     }
 
     /**

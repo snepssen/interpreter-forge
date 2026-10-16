@@ -8,6 +8,7 @@
 #
 #   scripts/test-engine.sh [TRANSLATE_GEMMA|EURO_LLM] [instrumentation args...]
 #   e.g. scripts/test-engine.sh TRANSLATE_GEMMA -e recordings pl,hu -e hearing 2 -e translating 2
+#   TESTS=StressTest scripts/test-engine.sh TRANSLATE_GEMMA -e minutes 10   (the stress tests instead)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . scripts/env.sh
@@ -47,6 +48,11 @@ for other in translategemma-4b-it.Q4_K_M.gguf EuroLLM-1.7B-Instruct.Q4_K_M.gguf;
 done
 stage $M/$GGUF $GGUF
 for f in ../samples/snep_*.wav; do stage "$f" "samples/$(basename "$f")"; done
-adb shell am instrument -w -e class com.snepssen.engine.DetectorTest $PKG/androidx.test.runner.AndroidJUnitRunner | tail -2
-adb shell am instrument -w -e class com.snepssen.engine.LiveTest -e model "$MODEL" "$@" $PKG/androidx.test.runner.AndroidJUnitRunner | tail -3
-adb shell run-as $PKG cat files/live-report.txt
+TESTS="${TESTS:-DetectorTest LiveTest}"
+for t in $TESTS; do
+  adb shell am instrument -w -e class com.snepssen.engine.$t -e model "$MODEL" "$@" $PKG/androidx.test.runner.AndroidJUnitRunner | tail -3
+  case $t in
+    LiveTest) adb shell run-as $PKG cat files/live-report.txt ;;
+    StressTest) adb shell run-as $PKG cat files/stress-report.txt ;;
+  esac
+done

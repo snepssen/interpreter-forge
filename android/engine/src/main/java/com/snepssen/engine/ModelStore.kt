@@ -24,9 +24,30 @@ object ModelStore {
     fun hasHearing(context: Context) =
         Hearing.parakeet.all { File(Hearing.parakeetFolder(context), it.name).length() == it.size }
 
-    /** Download `files` into `folder`; `progress` gets the fraction done, over all of them. */
-    suspend fun download(folder: File, files: List<ModelFile>, progress: (Double) -> Unit) = withContext(Dispatchers.IO) {
+    /**
+     * Download `files` into `folder`; `progress` gets the fraction done, over
+     * all of them. Fails at once, before fetching anything, if they won't fit,
+     * and says why in words, not as a Java exception.
+     */
+    suspend fun download(folder: File, files: List<ModelFile>, progress: (Double) -> Unit, alsoNeeded: Long = 0) = withContext(Dispatchers.IO) {
         folder.mkdirs()
+        val needed = remaining(folder, files) + alsoNeeded + (200L shl 20)  // and room to spare
+        if (folder.usableSpace < needed) {
+            throw IOException("Not enough free space: this needs %.1f GB, and the phone has %.1f GB free. Free some up and try again."
+                .format(needed / 1e9, folder.usableSpace / 1e9))
+        }
+        try { fetchAll(folder, files, progress) } catch (e: java.net.UnknownHostException) {
+            throw IOException("No internet connection. Connect to Wi-Fi and try again; the download picks up where it stopped.")
+        } catch (e: java.net.SocketTimeoutException) {
+            throw IOException("The connection stalled. Try again; the download picks up where it stopped.")
+        } catch (e: java.net.ConnectException) {
+            throw IOException("Couldn't reach the download server. Try again in a moment; the download picks up where it stopped.")
+        } catch (e: javax.net.ssl.SSLException) {
+            throw IOException("The connection dropped. Try again; the download picks up where it stopped.")
+        }
+    }
+
+    private suspend fun fetchAll(folder: File, files: List<ModelFile>, progress: (Double) -> Unit) {
         val total = files.sumOf { it.size }.toDouble()
         var before = 0L
         for (file in files) {
@@ -45,8 +66,10 @@ object ModelStore {
         }
     }
 
+    /** A translator; the space check counts speech recognition too, which comes next if it isn't here yet. */
     suspend fun download(context: Context, model: TranslationModel, progress: (Double) -> Unit) =
-        download(context.filesDir, listOf(model.file), progress)
+        download(context.filesDir, listOf(model.file), progress,
+                 alsoNeeded = remaining(Hearing.parakeetFolder(context), Hearing.parakeet))
 
     suspend fun downloadHearing(context: Context, progress: (Double) -> Unit) =
         download(Hearing.parakeetFolder(context), Hearing.parakeet, progress)

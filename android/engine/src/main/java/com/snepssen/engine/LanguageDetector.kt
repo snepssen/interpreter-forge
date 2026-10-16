@@ -23,16 +23,21 @@ import com.snepssen.core.Languages
 class LanguageDetector(context: Context) {
     data class Guess(val code: String, val confidence: Double)  // ISO 639-1, as Parakeet and TranslateGemma use
 
-    private val classifier: TextClassifier =
-        context.getSystemService(TextClassificationManager::class.java).textClassifier
+    private val classifier: TextClassifier? =
+        runCatching { context.getSystemService(TextClassificationManager::class.java)?.textClassifier }.getOrNull()
 
     /** Europe's languages and its neighbours': what the people this is for speak. */
     private val candidates = Languages.names.keys + setOf("no", "ca", "tr")
 
-    /** Never on the main thread: the system's classifier may block. */
+    /**
+     * Never on the main thread: the system's classifier may block. A phone
+     * whose classifier is missing or fails gives no guess: then nothing is
+     * taken as already understood, and a "translation" that only repeats its
+     * source is caught as an echo instead.
+     */
     fun guess(text: String): Guess? {
         if (text.isBlank()) return null
-        val result = classifier.detectLanguage(TextLanguage.Request.Builder(text).build())
+        val result = runCatching { classifier?.detectLanguage(TextLanguage.Request.Builder(text).build()) }.getOrNull() ?: return null
         val all = (0 until result.localeHypothesisCount).map { i ->
             val locale = result.getLocale(i)
             val code = when (locale.language) { "nb", "nn" -> "no"; else -> locale.language }
