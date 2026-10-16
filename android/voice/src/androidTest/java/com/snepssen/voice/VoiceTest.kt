@@ -27,13 +27,8 @@ class VoiceTest {
         "it" to "Qual è il colmo per un giardiniere? Piantare in asso qualcuno.",
     )
 
-    private fun asset(name: String) = File(context.filesDir, name).also { out ->
-        context.assets.open("voice/$name").use { input -> out.outputStream().use { input.copyTo(it) } }
-    }
-
     @Test fun everyLanguageSpeaks() {
-        asset("snepssen-polyglot.onnx.json")
-        val voice = Voice(asset("snepssen-polyglot.onnx"), EspeakData.directory(context))
+        val voice = PolyglotVoice.load(context)
         assertEquals(Polyphon.trained.toSet(), voice.languages.toSet())
         val out = context.getExternalFilesDir("speech")!!
         for ((language, text) in jokes) {

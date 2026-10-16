@@ -27,6 +27,7 @@ android {
         // espeak-ng's data and the parity fixtures are voice-core's own,
         // copied in by the tasks below rather than kept twice.
         getByName("main").assets.srcDir(layout.buildDirectory.dir("voiceCoreAssets").get().asFile)
+        getByName("main").assets.srcDir(layout.buildDirectory.dir("polyglotVoice").get().asFile)
         getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("voiceCoreFixtures").get().asFile)
     }
 }
@@ -39,14 +40,14 @@ val voiceCoreFixtures by tasks.registering(Copy::class) {
     from(voiceCore.resolve("Tests/VoiceCoreTests/Fixtures"))
     into(layout.buildDirectory.dir("voiceCoreFixtures/fixtures"))
 }
-// The polyglot voice for the speaking test: the same newest export or release
+// The polyglot voice, shipped in the app: the same newest export or release
 // the Apple builds bundle (apple/scripts/polyglot-voice.sh).
 val polyglotVoice by tasks.registering(Copy::class) {
     val model = providers.exec { commandLine(rootDir.resolve("../apple/scripts/polyglot-voice.sh").path) }
         .standardOutput.asText.map { File(it.trim()) }
     from(model) { rename { "snepssen-polyglot.onnx" } }
     from(model.map { File(it.path + ".json") }) { rename { "snepssen-polyglot.onnx.json" } }
-    into(layout.buildDirectory.dir("voiceCoreFixtures/voice"))
+    into(layout.buildDirectory.dir("polyglotVoice/voice"))
 }
 tasks.named("preBuild") { dependsOn(voiceCoreAssets, voiceCoreFixtures, polyglotVoice) }
 

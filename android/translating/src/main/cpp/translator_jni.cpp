@@ -2,6 +2,7 @@
 // between calls and only what changed since the last prompt is read, as the
 // iPhone app's PromptCache does: on a phone reading the prompt costs as much
 // as writing the answer.
+#include <cstdlib>
 #include <jni.h>
 #include <android/log.h>
 #include <string>
@@ -44,6 +45,12 @@ jbyteArray bytes(JNIEnv* env, const std::string& s) {
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_snepssen_translating_LlamaNative_initialize(JNIEnv* env, jclass, jstring nativeLibDir) {
+    // OpenMP's threads spin 200 ms after their work before sleeping, holding
+    // the cores speech recognition waits for. Never sleeping (a passive wait)
+    // costs more: a step syncs its threads hundreds of times. 20 ms keeps them
+    // awake through a translation and lets go soon after. Read when OpenMP
+    // starts, so set before the CPU backend loads.
+    setenv("KMP_BLOCKTIME", "20", 0);
     const char* dir = env->GetStringUTFChars(nativeLibDir, nullptr);
     ggml_backend_load_all_from_path(dir);  // the best CPU variant this phone has
     env->ReleaseStringUTFChars(nativeLibDir, dir);
@@ -95,6 +102,22 @@ Java_com_snepssen_translating_LlamaNative_tokenize(JNIEnv* env, jclass, jlong ha
     return out;
 }
 
+// Whether `out` holds a whole line worth saying: a non-empty line that has
+// ended, and isn't one that only announces the next ("Here's the English
+// translation:"), which Linguist.spoken skips.
+static bool saidLine(const std::string& out) {
+    size_t start = 0;
+    while (true) {
+        size_t text = out.find_first_not_of(" \n\t", start);
+        if (text == std::string::npos) return false;
+        size_t end = out.find('\n', text);
+        if (end == std::string::npos) return false;
+        size_t last = out.find_last_not_of(" \t\r", end - 1);
+        if (out[last] != ':') return true;
+        start = end + 1;
+    }
+}
+
 // The prompt's continuation, greedy, until an end-of-generation token or
 // maxTokens; with firstLine, also at the end of the first non-empty line. Only
 // the first line of an answer is ever said (the apps' Linguist.spoken), and a
@@ -125,10 +148,7 @@ Java_com_snepssen_translating_LlamaNative_generate(JNIEnv* env, jclass, jlong ha
         if (llama_vocab_is_eog(engine->vocab, token)) break;
         int n = llama_token_to_piece(engine->vocab, token, piece, sizeof(piece), 0, false);
         if (n > 0) out.append(piece, n);
-        if (firstLine) {
-            size_t text = out.find_first_not_of(" \n\t");
-            if (text != std::string::npos && out.find('\n', text) != std::string::npos) break;
-        }
+        if (firstLine && saidLine(out)) break;
         if (llama_decode(engine->ctx, llama_batch_get_one(&token, 1)) != 0) break;
         engine->held.push_back(token);
     }
