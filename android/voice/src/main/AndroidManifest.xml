@@ -1,1 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ONNX Runtime's Android library starts Microsoft's telemetry (device id,
+     model, timezone, battery) from a provider of its own when the app
+     launches, and asks for network-state access to send it. The interpreter
+     promises that nothing leaves the phone but the model downloads: both go. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <application>
+        <provider
+            android:name="ai.onnxruntime.TelemetryInitializer"
+            android:authorities="${applicationId}.onnxruntime_telemetry_initializer"
+            tools:node="remove" />
+    </application>
+</manifest>

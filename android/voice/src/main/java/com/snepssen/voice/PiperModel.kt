@@ -25,7 +25,7 @@ class PiperModel(model: File, config: File = File(model.path + ".json")) : AutoC
     val polyglot: Polyglot?
     val takesDurationFactors: Boolean
 
-    private val env = OrtEnvironment.getEnvironment()
+    private val env = Ort.env
     private val session: OrtSession
 
     init {

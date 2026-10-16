@@ -13,7 +13,7 @@ import java.nio.LongBuffer
  * 64 samples of the one before, which the v5 graph expects.
  */
 class SileroVad(model: File, private val on: Float = 0.5f, private val off: Float = 0.35f) : AutoCloseable {
-    private val env = OrtEnvironment.getEnvironment()
+    private val env = Ort.env
     private val session = env.createSession(model.absolutePath, OrtSession.SessionOptions().apply { setIntraOpNumThreads(1) })
     private var state = FloatArray(2 * 1 * 128)
     private var previous = FloatArray(CONTEXT)

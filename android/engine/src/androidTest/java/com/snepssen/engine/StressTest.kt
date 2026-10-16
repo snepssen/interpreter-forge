@@ -139,7 +139,9 @@ class StressTest {
 
     @Test fun modelClosedUnderATranslation() {
         say("\n== a model closed under a translation")
-        val own = Linguist(context, model, File(files, model.file.name), languages = emptyList())
+        // The shared model itself: two of them don't fit beside each other,
+        // which is why the app lets one go before loading the next.
+        val own = linguist
         val result = arrayOfNulls<Throwable>(1)
         val worker = Thread {
             try { repeat(5) { own.translate("Nie wiem, czy dzisiaj przyjdzie, bo pociąg z Krakowa jest odwołany.") } }
@@ -149,6 +151,7 @@ class StressTest {
         own.close()  // waits for the translation under way; the next one must refuse, not crash
         worker.join(60_000)
         say("closed mid-run: the next translation said \"${result[0]?.message}\"")
+        linguist = Linguist(context, model, File(files, model.file.name), languages = emptyList())
         assertTrue("expected a refusal, got ${result[0]}", result[0] is IllegalStateException)
     }
 

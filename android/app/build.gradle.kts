@@ -1,9 +1,16 @@
 // Interpreter for Android: the iPhone app's screens in Jetpack Compose over
 // the engine (hearing, translating, the voice, the live loop).
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
+
+// The release key and its password live outside git: keystore.properties
+// beside this project, pointing at ~/.android/interpreter-release.jks. Every
+// update must be signed with the same key, so both are backed up.
+val signing = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { f -> Properties().apply { f.inputStream().use(::load) } }
 
 android {
     namespace = "com.snepssen.interpreter"
@@ -15,6 +22,22 @@ android {
         versionCode = 1
         versionName = "0.1"
         ndk { abiFilters += "arm64-v8a" }
+    }
+    signingConfigs {
+        if (signing != null) create("release") {
+            storeFile = file(signing.getProperty("storeFile"))
+            storePassword = signing.getProperty("storePassword")
+            keyAlias = signing.getProperty("keyAlias")
+            keyPassword = signing.getProperty("keyPassword")
+        }
+    }
+    buildTypes {
+        release {
+            // No shrinking: sherpa-onnx and ONNX Runtime reach their Kotlin
+            // classes from native code by name, which R8 would rename away.
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
+        }
     }
     buildFeatures { compose = true; buildConfig = true }
     packaging {

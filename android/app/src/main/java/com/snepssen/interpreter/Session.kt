@@ -1,6 +1,7 @@
 package com.snepssen.interpreter
 
 import android.app.Application
+import android.util.Log
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -28,9 +29,13 @@ import com.snepssen.voice.Polyphon
 import com.snepssen.voice.PolyglotVoice
 import com.snepssen.voice.Voice
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -147,9 +152,30 @@ class Session(application: Application) : AndroidViewModel(application) {
 
     // models
 
-    private var recognizer: Recognizer? = null
-    private var linguist: Linguist? = null
-    private var voice: Voice? = null
+    /**
+     * The models belong to the process, not to this screen: closing the app
+     * with Back while it loads, then opening it again, must find what was
+     * loaded rather than load a second set beside it (each one 1-3 GB; under
+     * random tapping that took the phone's memory in a minute).
+     */
+    private object Loaded {
+        val lock = Mutex()
+        /** Where a model is let go: not the screen's scope, which a closing screen would cancel first. */
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        @Volatile var releasing: Job? = null
+        @Volatile var recognizer: Recognizer? = null
+        @Volatile var linguist: Linguist? = null
+        @Volatile var voice: Voice? = null
+    }
+    private var recognizer: Recognizer?
+        get() = Loaded.recognizer
+        set(value) { Loaded.recognizer = value }
+    private var linguist: Linguist?
+        get() = Loaded.linguist
+        set(value) { Loaded.linguist = value }
+    private var voice: Voice?
+        get() = Loaded.voice
+        set(value) { Loaded.voice = value }
     private var pipeline: Pipeline? = null
     private var meter: Job? = null
     private var lineIDs = mutableMapOf<Int, Int>()
@@ -171,22 +197,21 @@ class Session(application: Application) : AndroidViewModel(application) {
      * seconds on a slow phone, so it happens off the main thread; and loading
      * waits for it, so two models are never in memory at once.
      */
-    private var releasing: Job? = null
-
     private fun release(linguist: Linguist?) {
         linguist ?: return
-        val previous = releasing
-        releasing = viewModelScope.launch(Dispatchers.Default) { previous?.join(); linguist.close() }
+        val previous = Loaded.releasing
+        Loaded.releasing = Loaded.scope.launch { previous?.join(); linguist.close() }
     }
 
     private suspend fun load() {
+        Log.i(TAG, "load: phase=$phase busy=$busy model=$translationModel")
         if (busy || (phase != Phase.Idle && phase != Phase.ChoosingModel && phase !is Phase.Failed)) return
         val model = translationModel?.takeIf { isDownloaded(it) }
         if (model == null) { phase = Phase.ChoosingModel; return }
         busy = true
         try {
-            withContext(Dispatchers.Default) {
-                releasing?.join()
+            withContext(Dispatchers.Default) { Loaded.lock.withLock {
+                Loaded.releasing?.join()
                 if (!ModelStore.hasHearing(context)) {
                     phase = Phase.Loading("Downloading speech recognition…")
                     hearingDownload = 0.0
@@ -214,7 +239,7 @@ class Session(application: Application) : AndroidViewModel(application) {
                 phase = Phase.Loading("Warming up…")
                 linguist?.setLanguages(spoken, target)
                 linguist?.warmUp()
-            }
+            } }
             phase = Phase.Ready
         } catch (e: OutOfMemoryError) {
             phase = Phase.Failed("This phone ran out of memory loading the models. Close other apps and try again" +
@@ -228,6 +253,7 @@ class Session(application: Application) : AndroidViewModel(application) {
 
     /** Fetch a model; progress shows in `downloads`. Use it straight away if none is in use yet. */
     fun download(model: TranslationModel) {
+        Log.i(TAG, "download $model")
         if (model in downloads) return
         downloads[model] = 0.0
         viewModelScope.launch {
@@ -245,6 +271,7 @@ class Session(application: Application) : AndroidViewModel(application) {
 
     /** Switch the translation model; the old one leaves memory first. */
     fun use(model: TranslationModel) {
+        Log.i(TAG, "use $model (current $translationModel, busy=$busy)")
         if (busy || (model == translationModel && linguist != null)) return
         if (isLive) stop()
         translationModel = model
@@ -255,6 +282,7 @@ class Session(application: Application) : AndroidViewModel(application) {
     }
 
     fun delete(model: TranslationModel) {
+        Log.i(TAG, "delete $model")
         if (busy || model in downloads) return
         if (model == translationModel) {
             if (isLive) stop()
@@ -271,6 +299,7 @@ class Session(application: Application) : AndroidViewModel(application) {
 
     /** The caller has the microphone permission, unless `source` is a recording (a debug build's demo). */
     fun start(source: AudioSource = Microphone()) {
+        Log.i(TAG, "start: phase=$phase busy=$busy")
         val recognizer = recognizer; val linguist = linguist; val voice = voice
         if (phase != Phase.Ready || busy || recognizer == null || linguist == null || voice == null) return
         busy = true
@@ -313,6 +342,7 @@ class Session(application: Application) : AndroidViewModel(application) {
     }
 
     fun stop() {
+        Log.i(TAG, "stop: live=${pipeline != null}")
         val pipeline = pipeline ?: return
         this.pipeline = null
         meter?.cancel(); meter = null
@@ -390,14 +420,11 @@ class Session(application: Application) : AndroidViewModel(application) {
         if (i >= 0) lines[i] = change(lines[i])
     }
 
-    override fun onCleared() {
-        stop()
-        // A translation or pass under way finishes first; anything after throws, harmlessly.
-        val (linguist, recognizer, voice) = Triple(linguist, recognizer, voice)
-        Thread { linguist?.close(); recognizer?.close(); voice?.close() }.start()
-    }
+    /** The screen is gone; the models stay loaded for the next one, and go with the process. */
+    override fun onCleared() = stop()
 
     companion object {
+        private const val TAG = "Session"
         /** What the voice speaks well, in the order offered. */
         val trainedTargets = Polyphon.trained
         /** What it can be asked to speak beyond those: Parakeet's European languages, every one espeak-ng reads. */

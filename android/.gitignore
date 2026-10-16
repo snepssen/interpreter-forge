@@ -6,3 +6,4 @@ local.properties
 *.iml
 .kotlin/
 libs-maven/**/*.aar
+keystore.properties
