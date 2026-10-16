@@ -19,8 +19,8 @@ android {
         applicationId = "com.snepssen.interpreter"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.1.1"
         ndk { abiFilters += "arm64-v8a" }
     }
     signingConfigs {

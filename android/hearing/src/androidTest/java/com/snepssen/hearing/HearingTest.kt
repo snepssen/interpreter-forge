@@ -18,6 +18,34 @@ import java.nio.ByteOrder
 class HearingTest {
     private val files = InstrumentationRegistry.getInstrumentation().targetContext.filesDir
 
+    /** Same audio as the Mac benchmark; preserves every transcript for WER scoring. */
+    @Test fun polyglotBenchmark() {
+        org.junit.Assume.assumeTrue("push the optional benchmark corpus first", File(files, "benchmark").isDirectory)
+        val audioFiles = File(files, "benchmark").listFiles()?.filter { it.extension == "wav" }?.sortedBy { it.name }
+            ?: error("push the benchmark corpus first")
+        assertTrue("expected 32 benchmark clips", audioFiles.size == 32)
+        val report = File(files, "benchmark.jsonl")
+        report.writeText("")
+        Recognizer(File(files, "parakeet")).use { recognizer ->
+            for (audio in audioFiles) {
+                val samples = to16k(audio)
+                val started = System.nanoTime()
+                val words = recognizer.transcribe(samples, 0.0)
+                val seconds = (System.nanoTime() - started) / 1e9
+                val row = org.json.JSONObject()
+                    .put("file", audio.name)
+                    .put("model", "android-parakeet-ultra-int8")
+                    .put("reference", File(audio.parentFile, audio.nameWithoutExtension + ".txt").readText())
+                    .put("hypothesis", words.joinToString(" ") { it.text })
+                    .put("audio_seconds", samples.size / 16_000.0)
+                    .put("recognition_seconds", seconds)
+                report.appendText(row.toString() + "\n")
+                println("benchmark ${audio.name}: ${words.joinToString(" ") { it.text }}")
+                assertTrue("invalid timing", words.all { it.start.isFinite() && it.end.isFinite() && it.end >= it.start })
+            }
+        }
+    }
+
     @Test fun snepssenIsHeard() {
         val recognizer = Recognizer(File(files, "parakeet"))
         val report = StringBuilder()

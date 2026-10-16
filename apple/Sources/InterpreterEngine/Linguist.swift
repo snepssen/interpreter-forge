@@ -150,12 +150,23 @@ public actor Linguist {
             .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if lines.count > 1, lines[0].hasSuffix(":") { lines.removeFirst() }
         out = lines.first ?? ""
+        // Markdown emphasis ("not *too* good"): the voice would read the marks.
+        out = out.replacing(/\*{1,2}([^*\n]+)\*{1,2}/) { String($0.1) }
+        out = out.replacing(/(^|[^\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])/) { String($0.1) + String($0.2) }
+        // Alternatives offered for an ambiguous fragment: the first is said.
+        // "I'm asking… / I'm telling…" and "He/She places…" (the pronouns
+        // spelled in full, so "and/or" and a Polish "psa/kota" stay).
+        if let spaced = out.range(of: " / ") { out = String(out[..<spaced.lowerBound]) }
+        out = out.replacing(/\b(he|she|him|her|his|hers|they)\/(he|she|him|her|his|hers|they)\b/.ignoresCase()) { String($0.1) }
         out = out.replacing(/(\p{L}{3,})\/(\p{L}+)/) { match in
             let (first, second) = (String(match.1), String(match.2))
             return first.prefix(3) == second.prefix(3) ? first : "\(first)/\(second)"
         }
-        if let open = out.lastIndex(of: "("), out.hasSuffix(")"),
-           out[open...].split(separator: " ").count > 4, open > out.startIndex {
+        // A note at the end, even before a full stop: "…and (the sentence is incomplete in Italian)."
+        if let open = out.lastIndex(of: "("), open > out.startIndex,
+           let close = out.lastIndex(of: ")"), close > open,
+           out[out.index(after: close)...].allSatisfy({ ".!?…".contains($0) || $0.isWhitespace }),
+           out[open...close].split(separator: " ").count > 4 {
             out = String(out[..<open])
         }
         return out.trimmingCharacters(in: CharacterSet(charactersIn: "\"“” ")).trimmingCharacters(in: .whitespaces)

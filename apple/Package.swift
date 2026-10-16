@@ -55,6 +55,8 @@ let package = Package(
         .executableTarget(name: "Interpreter", dependencies: ["InterpreterEngine", "InterpreterUI"]),
         // Test speech in the app's own voice, for tcrun to interpret.
         .executableTarget(name: "tcsay", dependencies: ["InterpreterEngine"]),
+        // Recognition only: JSON evidence, without translation or playback.
+        .executableTarget(name: "tcasr", dependencies: ["InterpreterEngine"]),
         // A recording through the live pipeline in real time, for measuring.
         .executableTarget(name: "tcrun", dependencies: [
             "InterpreterCore", "InterpreterEngine", .product(name: "FluidAudio", package: "FluidAudio"),

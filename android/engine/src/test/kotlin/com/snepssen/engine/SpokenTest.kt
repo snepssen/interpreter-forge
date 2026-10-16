@@ -21,4 +21,14 @@ class SpokenTest {
             Linguist.spoken("\"It's raining cats and dogs.\" (This is a somewhat unusual phrase in the original.)"))
         assertEquals("He said (twice) no.", Linguist.spoken("He said (twice) no."))
     }
+
+    /** TranslateGemma on a fragment of Italian it found ambiguous (2026-10-16). */
+    @Test fun alternativesAndClosingNotesAreNotSaid() {
+        assertEquals("He places the advertisement in the newspaper.", Linguist.spoken("He/She places the advertisement in the newspaper."))
+        assertEquals("I’m asking you to judge how I look.", Linguist.spoken("I’m asking you to judge how I look. / I’m asking you to tell me what you think"))
+        assertEquals("This is coming from the secretary and…", Linguist.spoken("This is coming from the secretary and… (the sentence is incomplete in Italian)."))
+        assertEquals("Coffee and/or tea.", Linguist.spoken("Coffee and/or tea."))
+        assertEquals("Yes? Yes. But not too good, though.", Linguist.spoken("Yes? Yes. But not *too* good, though."))
+        assertEquals("It was really that bad.", Linguist.spoken("It was **really** _that_ bad."))
+    }
 }

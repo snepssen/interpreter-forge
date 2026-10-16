@@ -41,4 +41,17 @@ final class SpokenTests: XCTestCase {
         XCTAssertEqual(Linguist.spoken("No, po prostu chciałem/chciałam powiedzieć."), "No, po prostu chciałem powiedzieć.")
         XCTAssertEqual(Linguist.spoken("Mam psa/kota."), "Mam psa/kota.")
     }
+
+    /// TranslateGemma on a fragment of Italian it found ambiguous (2026-10-16).
+    func testAlternativesAndClosingNotesAreNotSaid() {
+        XCTAssertEqual(Linguist.spoken("He/She places the advertisement in the newspaper."),
+                       "He places the advertisement in the newspaper.")
+        XCTAssertEqual(Linguist.spoken("I’m asking you to judge how I look. / I’m asking you to tell me what you think"),
+                       "I’m asking you to judge how I look.")
+        XCTAssertEqual(Linguist.spoken("This is coming from the secretary and… (the sentence is incomplete in Italian)."),
+                       "This is coming from the secretary and…")
+        XCTAssertEqual(Linguist.spoken("Coffee and/or tea."), "Coffee and/or tea.")
+        XCTAssertEqual(Linguist.spoken("Yes? Yes. But not *too* good, though."), "Yes? Yes. But not too good, though.")
+        XCTAssertEqual(Linguist.spoken("It was **really** _that_ bad."), "It was really that bad.")
+    }
 }

@@ -19,3 +19,6 @@ apple/iOS/App/Info.plist
 docs/__pycache__/
 .claude/
 samples/*.txt
+
+# Third-party demo clips (Creative Commons, credited in the deck) and their renders
+demo/media/

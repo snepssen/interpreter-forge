@@ -152,6 +152,9 @@ class Linguist(
 
     companion object {
         private val gendered = Regex("""(\p{L}{3,})/(\p{L}+)""")
+        private val emphasis = Regex("""\*{1,2}([^*\n]+)\*{1,2}""")
+        private val underscores = Regex("""(?<![\p{L}\p{N}])_([^_\n]+)_(?![\p{L}\p{N}])""")
+        private val pronouns = Regex("""\b(he|she|him|her|his|hers|they)/(he|she|him|her|his|hers|they)\b""", RegexOption.IGNORE_CASE)
 
         /**
          * What is worth saying of an output: its first line, without quotes or a
@@ -165,12 +168,20 @@ class Linguist(
             val lines = output.trim().split("\n").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
             if (lines.size > 1 && lines[0].endsWith(":")) lines.removeAt(0)
             var out = lines.firstOrNull() ?: ""
+            // Markdown emphasis ("not *too* good"): the voice would read the marks.
+            out = emphasis.replace(out) { it.groupValues[1] }
+            out = underscores.replace(out) { it.groupValues[1] }
+            // Alternatives offered for an ambiguous fragment: the first is said.
+            out.indexOf(" / ").takeIf { it >= 0 }?.let { out = out.substring(0, it) }
+            out = pronouns.replace(out) { it.groupValues[1] }
             out = gendered.replace(out) { m ->
                 val (first, second) = m.destructured
                 if (first.take(3) == second.take(3)) first else "$first/$second"
             }
-            val open = out.lastIndexOf('(')
-            if (open > 0 && out.endsWith(")") && out.substring(open).split(" ").count { it.isNotEmpty() } > 4) out = out.substring(0, open)
+            // A note at the end, even before a full stop: "…and (the sentence is incomplete in Italian)."
+            val open = out.lastIndexOf('('); val close = out.lastIndexOf(')')
+            if (open > 0 && close > open && out.substring(close + 1).all { it in ".!?…" || it.isWhitespace() } &&
+                out.substring(open, close + 1).split(" ").count { it.isNotEmpty() } > 4) out = out.substring(0, open)
             return out.trim { it in "\"“” " }.trim()
         }
     }

@@ -59,6 +59,10 @@ final class Tally: @unchecked Sendable {
     var lags: [Double] = []
     var silent: [Silence: Int] = [:]
     var texts: [Int: String] = [:]
+    /// For pieces.json: what was heard, and what was said for it.
+    var heard: [[String: Any]] = []
+    var said: [[String: Any]] = []
+    var unsaid: [[String: Any]] = []
 }
 let tally = Tally()
 
@@ -70,13 +74,16 @@ try pipeline.start(source: Recording(samples), speaker: nil, audible: false) { e
         switch event {
         case .committed(let s):
             tally.texts[s.index] = s.text
+            tally.heard.append(["index": s.index, "start": s.start, "end": s.end, "decided": s.decidedAt, "reason": s.reason, "text": s.text])
             print(String(format: "[%6.2f–%6.2f] %-8@ │ %@", s.start, s.end, s.reason, s.text))
         case .silent(let index, let why, let detail):
+            tally.unsaid.append(["index": index, "why": why.rawValue, "detail": detail ?? ""])
             tally.silent[why, default: 0] += 1
             print("  #\(index) \(why.rawValue), not spoken")
             if why == .unclear, let detail { print("    \(detail)") }
         case .interpreted(let indices, let translation, let start, let lags, let brief, let pace):
             tally.lags += lags
+            tally.said.append(["indices": indices, "translation": translation, "start": start, "lag": lags.max() ?? 0])
             let marks = (brief ? " [brief]" : "") + (pace > 1 ? String(format: " [x%.2f]", pace) : "")
             print(String(format: "  #%@ plays %6.2fs lag %4.1fs%@ → %@", indices.map(String.init).joined(separator: "+"),
                          start, lags.max() ?? 0, marks, translation))
@@ -120,4 +127,19 @@ if let speaker = pipeline.speaker {
     let file = try AVAudioFile(forWriting: out.appending(path: "listen.wav"), settings: format.settings)
     try file.write(from: pcm)
     info("wrote \(out.path)/listen.wav (L: speaker, R: interpreter)")
+
+    // The same run as data: each heard piece, and each translation with when
+    // it played and for how long, for captions and charts.
+    let durations = Dictionary(speaker.placed.map { (String(format: "%.3f", $0.start), Double($0.samples.count) / rate) },
+                               uniquingKeysWith: { a, _ in a })
+    let said = tally.said.map { piece -> [String: Any] in
+        var piece = piece
+        piece["seconds"] = durations[String(format: "%.3f", piece["start"] as? Double ?? 0)] ?? 0
+        return piece
+    }
+    let json: [String: Any] = ["audio": inputURL.lastPathComponent, "into": target, "model": model.name,
+                               "heard": tally.heard, "said": said, "unsaid": tally.unsaid]
+    try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+        .write(to: out.appending(path: "pieces.json"))
+    info("wrote \(out.path)/pieces.json")
 }
