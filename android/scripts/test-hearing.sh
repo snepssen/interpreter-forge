@@ -6,6 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . scripts/env.sh
+# Which Parakeet: the folder under ../models/android (default: Ultra).
+MODEL="${1:-sherpa-onnx-parakeet-ultra-int8}"
 ./gradlew -q :hearing:assembleDebugAndroidTest
 PKG=com.snepssen.hearing.test
 adb install -r -t hearing/build/outputs/apk/androidTest/debug/hearing-debug-androidTest.apk >/dev/null
@@ -15,7 +17,7 @@ adb install -r -t hearing/build/outputs/apk/androidTest/debug/hearing-debug-andr
 TMP=/data/local/tmp/hearing
 adb shell mkdir -p $TMP/parakeet $TMP/samples
 for f in encoder.int8.onnx decoder.int8.onnx joiner.int8.onnx tokens.txt; do
-  adb shell "[ -s $TMP/parakeet/$f ]" 2>/dev/null || adb push -q ../models/android/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/$f $TMP/parakeet/
+  adb push -q ../models/android/$MODEL/$f $TMP/parakeet/
 done
 adb push -q ../models/android/silero_vad_v5.onnx $TMP/
 adb push -q ../samples/snep_*.wav ../samples/snep_*.txt $TMP/samples/
