@@ -1,6 +1,7 @@
 package com.snepssen.hearing
 
 import com.k2fsa.sherpa.onnx.FeatureConfig
+import com.snepssen.core.Word
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig

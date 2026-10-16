@@ -23,6 +23,7 @@ android {
 }
 
 dependencies {
+    api(project(":core"))
     implementation(libs.onnxruntime.android)
     // The variant with ONNX Runtime linked in: no second libonnxruntime.so.
     implementation(libs.sherpa.onnx)
