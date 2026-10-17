@@ -1,4 +1,5 @@
 import AVFoundation
+import FluidAudio
 import Foundation
 import InterpreterCore
 import Observation
@@ -252,6 +253,17 @@ public final class LiveSession {
         }
     }
 
+    /// A recording played in as if it were the microphone, with no audio
+    /// session, speaker or voice: for checking the screens on a device without
+    /// sound in the room. Set from a launch argument naming a file in the app's
+    /// own container, which only a developer can place there.
+    public var demoRecording: [Float]?
+
+    public func useDemoRecording(at url: URL) {
+        do { demoRecording = try AudioConverter().resampleAudioFile(url) }
+        catch { notice = "Demo recording \(url.lastPathComponent): \(error.localizedDescription)" }
+    }
+
     public func start() async {
         guard active, !starting, !isLive, preparationID == nil else { return }
         let generation = self.generation
@@ -265,7 +277,7 @@ public final class LiveSession {
             if Resources.vad == nil { phase = .failed("No voice activity model (models/silero_vad.onnx).") }
             return
         }
-        let allowed = await Self.microphoneAllowed()
+        let allowed = demoRecording != nil ? true : await Self.microphoneAllowed()
         guard generation == self.generation else { return }
         guard allowed else {
             notice = "Interpreter needs the microphone: allow it in System Settings → Privacy & Security → Microphone, then press Live."
@@ -276,8 +288,14 @@ public final class LiveSession {
         let pipeline = Pipeline(recognizer: recognizer, linguist: linguist, voice: voice, vad: vad)
         let (events, continuation) = AsyncStream<PipelineEvent>.makeStream()
         do {
-            try pipeline.start(microphone: microphone, speaker: speaker) { event in
-                continuation.yield(event)
+            if let demo = demoRecording {
+                try pipeline.start(source: Recording(demo), speaker: nil, audible: false) { event in
+                    continuation.yield(event)
+                }
+            } else {
+                try pipeline.start(microphone: microphone, speaker: speaker) { event in
+                    continuation.yield(event)
+                }
             }
         } catch {
             notice = "Couldn't open the audio: \(error.localizedDescription)"
@@ -296,7 +314,7 @@ public final class LiveSession {
         #if os(iOS)
         inputDescription = PhoneAudio.inputDescription
         if PhoneAudio.Input(microphone).usesHeadphones && !PhoneAudio.inputIsHeadphones {
-            notice = "No headphone microphone is connected, so the iPhone's is listening."
+            notice = "No headphone microphone is connected, so the \(ThisDevice.name)'s is listening."
         }
         #endif
         phase = .live

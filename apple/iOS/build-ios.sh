@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Build the iPhone app and install it on a connected iPhone.
+# Build the iPhone and iPad app and install it on a connected device.
 #
-#   iOS/build-ios.sh            # build, install on the first connected iPhone
+#   iOS/build-ios.sh                # build, install on the first connected iPhone or iPad
+#   iOS/build-ios.sh --device iPad  # on the first connected iPad (or a name, like "iPhone 17")
 #   iOS/build-ios.sh --no-install
 #
 # The voice is voice-polyglot's newest export or release
@@ -51,7 +52,15 @@ codesign --verify --deep --strict "$APP"
 echo "built: $APP ($(du -sh "$APP" | cut -f1))"
 
 [ "${1:-}" = "--no-install" ] && exit 0
-DEVICE="$(xcrun devicectl list devices 2>/dev/null | awk '/iPhone/ && /available/ {for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-F]{8}-/) print $i}' | head -1)"
-[ -n "$DEVICE" ] || { echo "no iPhone connected and available" >&2; exit 1; }
+WANT="iPhone|iPad"
+[ "${1:-}" = "--device" ] && WANT="${2:?a device, like iPad or \"iPhone 17\"}"
+LINE="$(xcrun devicectl list devices 2>/dev/null | grep -E "$WANT" | grep -E "available|connected" | head -1 || true)"
+DEVICE="$(awk '{for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-F]{8}-/) print $i}' <<< "$LINE" | head -1)"
+[ -n "$DEVICE" ] || {
+  echo "no $WANT connected and available. A new device needs unlocking, 'Trust This Computer', and" >&2
+  echo "Developer Mode on (Settings → Privacy & Security → Developer Mode); see: xcrun devicectl list devices" >&2
+  exit 1
+}
 xcrun devicectl device install app --device "$DEVICE" "$APP"
-xcrun devicectl device process launch --terminate-existing --device "$DEVICE" com.snepssen.interpreter >/dev/null && echo "launched on the iPhone"
+xcrun devicectl device process launch --terminate-existing --device "$DEVICE" com.snepssen.interpreter >/dev/null \
+  && echo "launched on $(awk '{print $1, $2}' <<< "$LINE" | sed 's/  *$//')"

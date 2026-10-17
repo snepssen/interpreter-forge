@@ -1,5 +1,7 @@
-# The iPhone app. `xcodegen` turns this into Interpreter.xcodeproj (not kept in
-# git); build-ios.sh does that, stages the bundled data, builds and installs.
+# The iPhone and iPad app. `xcodegen` turns this into Interpreter.xcodeproj
+# (not kept in git); build-ios.sh does that, stages the bundled data, builds
+# and installs. A phone stays upright; an iPad turns every way and shares its
+# screen (Split View, Stage Manager), so the layout follows the window's width.
 name: Interpreter
 options:
   deploymentTarget:
@@ -33,11 +35,13 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Interpreter
-        NSMicrophoneUsageDescription: Interpreter listens to the conversation around you to translate it into English, on this iPhone.
+        NSMicrophoneUsageDescription: Interpreter listens to the conversation around you to translate it into your language, on this device.
         UILaunchScreen: {}
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown,
+                                                UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.snepssen.interpreter
@@ -45,7 +49,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: Interpreter.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         MARKETING_VERSION: "0.1"
         CURRENT_PROJECT_VERSION: "1"

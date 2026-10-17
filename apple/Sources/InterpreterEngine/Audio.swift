@@ -292,7 +292,7 @@ public enum PhoneAudio {
     public static var inputDescription: String {
         let session = AVAudioSession.sharedInstance()
         guard let port = session.currentRoute.inputs.first else { return "No microphone" }
-        var parts = [port.portType == .builtInMic ? "iPhone microphone" : port.portName]
+        var parts = [port.portType == .builtInMic ? "\(ThisDevice.name) microphone" : port.portName]
         if #available(iOS 26.0, *), let bluetooth = port.bluetoothMicrophoneExtension {
             parts.append(bluetooth.highQualityRecording.isEnabled ? "full quality" : "call quality")
             parts.append(bluetooth.farFieldCapture.isEnabled ? "whole room" : "mainly the wearer")
@@ -341,6 +341,14 @@ public enum PhoneAudio {
             }
         }
         try session.setActive(true)
+    }
+
+    /// The category alone, at launch, without taking the audio: only then does
+    /// iOS list a headset that is connected but playing another device's sound
+    /// (AirPods' automatic switching), so the screen can say it will switch here.
+    public static func prepare() {
+        try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default,
+                                                         options: [.allowBluetoothHFP, .defaultToSpeaker])
     }
 
     public static func deactivate() {

@@ -18,15 +18,57 @@ public struct ContentView: View {
     @State private var dark = false
     #if os(iOS)
     @State private var output = PhoneOutput.current
+    @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
     public init(session: LiveSession) { self.session = session }
 
+    /// An iPad, or any iOS window as wide: bigger type and a bigger button.
+    private var roomy: Bool {
+        #if os(iOS)
+        sizeClass == .regular
+        #else
+        false
+        #endif
+    }
+
+    /// Wide enough for the conversation and a panel beside it: an iPad in
+    /// landscape. Portrait (970 points wide with More Space display zoom),
+    /// Split View and phones keep the stacked layout.
+    private static func wide(_ size: CGSize) -> Bool {
+        #if os(iOS)
+        size.width >= 900 && size.width > size.height
+        #else
+        false
+        #endif
+    }
+
     public var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            content.frame(maxWidth: .infinity, maxHeight: .infinity)
-            controls
+        GeometryReader { geometry in
+            if Self.wide(geometry.size) {
+                HStack(spacing: 0) {
+                    content.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // No bar above the conversation here: let it fade out under
+                        // the status bar rather than scroll beneath the clock.
+                        .overlay(alignment: .top) {
+                            LinearGradient(colors: [InterfaceStyle.canvas, InterfaceStyle.canvas.opacity(0)],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(height: geometry.safeAreaInsets.top + 28)
+                                .ignoresSafeArea(edges: .top)
+                                .allowsHitTesting(false)
+                        }
+                    sidePanel
+                        .frame(width: min(400, geometry.size.width * 0.34))
+                        .background(InterfaceStyle.surface.opacity(0.45))
+                        .overlay(alignment: .leading) { Divider() }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    topBar
+                    content.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    controls
+                }
+            }
         }
         .background(InterfaceStyle.canvas)
         .sheet(isPresented: $showingSettings) { SettingsView(session: session) }
@@ -49,17 +91,21 @@ public struct ContentView: View {
             LanguageMenu(session: session, locked: session.isLive || session.isBusy)
                 .layoutPriority(-1)
             Spacer(minLength: 8)
-            #if os(macOS)
-            AudioMenu(session: session)
-            #endif
-            #if os(iOS)
-            if session.isLive {
-                iconButton("moon", label: "Darken the screen") { dark = true }
-            }
-            #endif
-            iconButton("gearshape", label: "Settings") { showingSettings = true }
+            barButtons
         }
         .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 4)
+    }
+
+    @ViewBuilder private var barButtons: some View {
+        #if os(macOS)
+        AudioMenu(session: session)
+        #endif
+        #if os(iOS)
+        if session.isLive {
+            iconButton("moon", label: "Darken the screen") { dark = true }
+        }
+        #endif
+        iconButton("gearshape", label: "Settings") { showingSettings = true }
     }
 
     private func iconButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
@@ -108,13 +154,13 @@ public struct ContentView: View {
             extra().padding(.top, 6)
         }
         .multilineTextAlignment(.center)
-        .frame(maxWidth: 420)
+        .frame(maxWidth: roomy ? 520 : 420)
         .padding(24)
     }
 
     private var readyTitle: String {
         #if os(iOS)
-        output.isHeadphones ? "Ready to interpret" : "Put your headphones in"
+        output.isHeadphones || output.standby != nil ? "Ready to interpret" : "Put your headphones in"
         #else
         "Ready to interpret"
         #endif
@@ -123,9 +169,19 @@ public struct ContentView: View {
     private var readyDetail: String {
         let chosen = session.spoken
         let into = session.languageName(session.target)
-        if chosen.isEmpty { return "Other languages are spoken to you in \(into)." }
-        let verb = chosen.count == 1 ? "is" : "are"
-        return "\(session.languageList(chosen)) \(verb) spoken to you in \(into); other languages are skipped."
+        var detail: String
+        if chosen.isEmpty {
+            detail = "Other languages are spoken to you in \(into)."
+        } else {
+            let verb = chosen.count == 1 ? "is" : "are"
+            detail = "\(session.languageList(chosen)) \(verb) spoken to you in \(into); other languages are skipped."
+        }
+        #if os(iOS)
+        if !output.isHeadphones, let standby = output.standby {
+            detail += " \(standby) will switch to this \(ThisDevice.name) when you press Live."
+        }
+        #endif
+        return detail
     }
 
     private var transcript: some View {
@@ -133,12 +189,13 @@ public struct ContentView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     ForEach(visible) { line in
-                        LineView(line: line, prominent: line.id == latestID, isLive: session.isLive).id(line.id)
+                        LineView(line: line, prominent: line.id == latestID, isLive: session.isLive, roomy: roomy)
+                            .id(line.id)
                     }
                 }
-                .frame(maxWidth: 720, alignment: .leading)
+                .frame(maxWidth: roomy ? 860 : 720, alignment: .leading)
                 .frame(maxWidth: .infinity)
-                .padding(16)
+                .padding(roomy ? 28 : 16)
             }
             .defaultScrollAnchor(.bottom)
             .onChange(of: session.lines) {
@@ -185,14 +242,76 @@ public struct ContentView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 720, alignment: .leading)
             }
-            LiveButton(session: session)
+            LiveButton(session: session, size: roomy ? 100 : LiveButton.standardSize)
             Text(status)
-                .font(.footnote).monospacedDigit().foregroundStyle(.secondary)
+                .font(roomy ? .callout : .footnote).monospacedDigit().foregroundStyle(.secondary)
                 .lineLimit(1).truncationMode(.middle)
         }
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
         .frame(maxWidth: .infinity)
         .overlay(alignment: .top) { Divider() }
+    }
+
+    // MARK: side panel (iPad, landscape)
+
+    /// Everything the stacked layout has above and below the conversation,
+    /// beside it instead, with room to spare: the hearing line runs longer,
+    /// the button is bigger, and the voice's two quick settings are at hand.
+    private var sidePanel: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 4) {
+                LanguageMenu(session: session, locked: session.isLive || session.isBusy)
+                    .layoutPriority(-1)
+                Spacer(minLength: 8)
+                barButtons
+            }
+            Spacer(minLength: 0)
+            if session.isLive {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Hearing", systemImage: "ear")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(session.hearing.isEmpty ? "Waiting for speech" : session.hearing)
+                        .font(.title3)
+                        .foregroundStyle(session.hearing.isEmpty ? .tertiary : .primary)
+                        .lineLimit(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(16)
+                .background(InterfaceStyle.canvas, in: RoundedRectangle(cornerRadius: 14))
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(session.hearing.isEmpty ? "Waiting for speech" : "Hearing: \(session.hearing)")
+            }
+            if let notice = session.notice {
+                Label {
+                    Text(notice)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle").foregroundStyle(.orange)
+                }
+                .font(.callout)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(spacing: 10) {
+                LiveButton(session: session, size: 128)
+                Text(status)
+                    .font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            .frame(maxWidth: .infinity)
+            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle("Captions only", isOn: $session.captionsOnly)
+                HStack(spacing: 12) {
+                    Image(systemName: "speaker.fill").foregroundStyle(.secondary)
+                    Slider(value: $session.voiceVolume, in: 0...1)
+                        .accessibilityLabel("Volume")
+                    Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
+                }
+                .disabled(session.captionsOnly)
+            }
+            .padding(16)
+            .background(InterfaceStyle.canvas, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .padding(.horizontal, 24).padding(.vertical, 16)
     }
 
     /// One status for the whole screen: where the voice goes before Live,
@@ -220,7 +339,8 @@ public struct ContentView: View {
 
     private var outputName: String {
         #if os(iOS)
-        output.name
+        if !output.isHeadphones, let standby = output.standby { return "\(PhoneOutput.short(standby)), when Live" }
+        return output.name
         #else
         session.speaker ?? "Default output"
         #endif
@@ -231,12 +351,13 @@ public struct ContentView: View {
 /// around it so it's clear at a glance that sound is coming in.
 struct LiveButton: View {
     let session: LiveSession
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
-    private let size: CGFloat = 84
+    static let standardSize: CGFloat = 84
     #else
-    private let size: CGFloat = 64
+    static let standardSize: CGFloat = 64
     #endif
+    var size: CGFloat = LiveButton.standardSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var enabled: Bool { !session.isBusy && (session.phase == .ready || session.isLive) }
     private var level: CGFloat { session.isLive ? CGFloat(min(1, sqrt(Double(session.level)) * 3)) : 0 }
 
@@ -276,6 +397,12 @@ struct LineView: View {
     let line: LiveSession.Line
     var prominent = false
     var isLive = true
+    /// An iPad's type: one step up, the newest translation two.
+    var roomy = false
+
+    private var lead: Font { roomy ? .title.weight(.semibold) : .title2.weight(.semibold) }
+    private var plain: Font { roomy ? .title3 : .body }
+    private var under: Font { roomy ? .body : .callout }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -290,9 +417,9 @@ struct LineView: View {
     @ViewBuilder private var content: some View {
         switch line.silence {
         case .understood?, .echo?:
-            Text(line.source).italic().foregroundStyle(.secondary)
+            Text(line.source).font(plain).italic().foregroundStyle(.secondary)
         case .language?:
-            Text(line.source).foregroundStyle(.tertiary)
+            Text(line.source).font(plain).foregroundStyle(.tertiary)
             Text("Skipped: not one of your languages").font(.caption).foregroundStyle(.tertiary)
         case .unclear?:
             Label {
@@ -300,17 +427,17 @@ struct LineView: View {
             } icon: {
                 Image(systemName: "questionmark.circle").foregroundStyle(.orange)
             }
-            .font(prominent ? .title3.weight(.medium) : .body)
-            Text(line.source).font(.callout).foregroundStyle(.secondary)
+            .font(prominent ? (roomy ? .title2.weight(.medium) : .title3.weight(.medium)) : plain)
+            Text(line.source).font(under).foregroundStyle(.secondary)
         case nil:
             if let translation = line.translation {
-                Text(translation).font(prominent ? .title2.weight(.semibold) : .body)
+                Text(translation).font(prominent ? lead : plain)
                 if prominent {
-                    Text(line.source).font(.callout).foregroundStyle(.secondary)
+                    Text(line.source).font(under).foregroundStyle(.secondary)
                     if line.brief { Text("Shortened to catch up").font(.caption).foregroundStyle(.tertiary) }
                 }
             } else {
-                Text(line.source).font(prominent ? .title3 : .body).foregroundStyle(.secondary)
+                Text(line.source).font(prominent ? (roomy ? .title2 : .title3) : plain).foregroundStyle(.secondary)
                 Text(isLive ? "Translating…" : "Stopped before translation").font(.caption).foregroundStyle(.tertiary)
             }
         }
@@ -427,18 +554,31 @@ struct AudioMenu: View {
 struct PhoneOutput: Equatable {
     let name: String
     let isHeadphones: Bool
+    /// Headphones connected but playing another device's sound, as AirPods do
+    /// with automatic switching: they move here when Live starts.
+    var standby: String? = nil
+
+    /// "Tamás’s AirPods Pro 3" → "AirPods Pro 3", for a one-line status.
+    static func short(_ name: String) -> String {
+        for mark in ["’s ", "'s "] {
+            if let range = name.range(of: mark) { return String(name[range.upperBound...]) }
+        }
+        return name
+    }
 
     static var current: PhoneOutput {
-        guard let port = AVAudioSession.sharedInstance().currentRoute.outputs.first else {
-            return PhoneOutput(name: "iPhone speaker", isHeadphones: false)
-        }
+        let session = AVAudioSession.sharedInstance()
+        let standby = session.availableInputs?
+            .first { $0.portType == .bluetoothHFP || $0.portType == .bluetoothLE }?.portName
+        let speaker = PhoneOutput(name: "\(ThisDevice.name) speaker", isHeadphones: false, standby: standby)
+        guard let port = session.currentRoute.outputs.first else { return speaker }
         switch port.portType {
         case .builtInSpeaker, .builtInReceiver:
-            return PhoneOutput(name: "iPhone speaker", isHeadphones: false)
+            return speaker
         case .headphones, .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .usbAudio:
             return PhoneOutput(name: port.portName, isHeadphones: true)
         default:
-            return PhoneOutput(name: port.portName, isHeadphones: false)
+            return PhoneOutput(name: port.portName, isHeadphones: false, standby: standby)
         }
     }
 }
@@ -456,7 +596,7 @@ struct DarkScreen: View {
             VStack(spacing: 28) {
                 Spacer()
                 Text(latest?.translation ?? "Listening")
-                    .font(.title2.weight(.medium))
+                    .font(ThisDevice.isPad ? .largeTitle.weight(.medium) : .title2.weight(.medium))
                     .foregroundStyle(Color(white: 0.5))
                     .multilineTextAlignment(.center)
                 Spacer()

@@ -42,7 +42,7 @@ public struct SettingsView: View {
                 #if os(iOS)
                 Section {
                     Picker("Microphone", selection: microphone) {
-                        Text("iPhone").tag(PhoneAudio.Input.phone)
+                        Text(ThisDevice.name).tag(PhoneAudio.Input.phone)
                         Text("Headphones, whole room").tag(PhoneAudio.Input.headphonesRoom)
                         Text("Headphones, your voice").tag(PhoneAudio.Input.headphonesWearer)
                     }
