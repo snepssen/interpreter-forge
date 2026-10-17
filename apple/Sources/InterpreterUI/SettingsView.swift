@@ -92,13 +92,14 @@ public struct SettingsView: View {
                 }
 
                 Section {
+                    TextSizeControl()
                     Toggle("Show lines already in \(session.languageName(session.target))", isOn: $showEnglish)
                     Button("Clear conversation", role: .destructive) { session.clear() }
                         .disabled(session.lines.isEmpty || session.isLive)
                 } header: {
                     Text("Conversation")
                 } footer: {
-                    Text("Speech, translations and models stay on this device.")
+                    Text("Text size makes the conversation larger or smaller, up to four times, on top of the system's own text size. Speech, translations and models stay on this device.")
                 }
             }
             .formStyle(.grouped)

@@ -12,6 +12,9 @@ import UIKit
 /// doing, what was just said) and keeps everything else one tap away.
 public struct ContentView: View {
     @Bindable var session: LiveSession
+    /// The live hearing line grows with the chosen text size, at most double,
+    /// so it never crowds the button out.
+    @AppStorage(TextSize.key) private var textScale = 1.0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("showEnglish") private var showEnglish = true
     @State private var showingSettings = false
@@ -228,7 +231,7 @@ public struct ContentView: View {
                 } icon: {
                     Image(systemName: "ear").foregroundStyle(.secondary)
                 }
-                .font(.callout)
+                .font(.system(size: TextSize.callout * min(textScale, 2)))
                 .frame(maxWidth: 720, alignment: .leading)
                 .accessibilityLabel(session.hearing.isEmpty ? "Waiting for speech" : "Hearing: \(session.hearing)")
             }
@@ -271,7 +274,7 @@ public struct ContentView: View {
                     Label("Hearing", systemImage: "ear")
                         .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                     Text(session.hearing.isEmpty ? "Waiting for speech" : session.hearing)
-                        .font(.title3)
+                        .font(.system(size: TextSize.title3 * min(textScale, 2)))
                         .foregroundStyle(session.hearing.isEmpty ? .tertiary : .primary)
                         .lineLimit(6)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -299,6 +302,7 @@ public struct ContentView: View {
             .frame(maxWidth: .infinity)
             Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: 14) {
+                TextSizeControl()
                 Toggle("Captions only", isOn: $session.captionsOnly)
                 HStack(spacing: 12) {
                     Image(systemName: "speaker.fill").foregroundStyle(.secondary)
@@ -399,14 +403,26 @@ struct LineView: View {
     var isLive = true
     /// An iPad's type: one step up, the newest translation two.
     var roomy = false
+    @AppStorage(TextSize.key) private var scale = 1.0
+    // The system's text size still applies; the chosen scale multiplies it.
+    @ScaledMetric(relativeTo: .title) private var title = TextSize.title
+    @ScaledMetric(relativeTo: .title2) private var title2 = TextSize.title2
+    @ScaledMetric(relativeTo: .title3) private var title3 = TextSize.title3
+    @ScaledMetric(relativeTo: .body) private var body_ = TextSize.body
+    @ScaledMetric(relativeTo: .callout) private var callout = TextSize.callout
+    @ScaledMetric(relativeTo: .caption) private var caption = TextSize.caption
 
-    private var lead: Font { roomy ? .title.weight(.semibold) : .title2.weight(.semibold) }
-    private var plain: Font { roomy ? .title3 : .body }
-    private var under: Font { roomy ? .body : .callout }
+    private func sized(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: size * scale, weight: weight)
+    }
+    private var lead: Font { sized(roomy ? title : title2, .semibold) }
+    private var plain: Font { sized(roomy ? title3 : body_) }
+    private var under: Font { sized(roomy ? body_ : callout) }
+    private var note: Font { sized(caption) }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            LanguageChip(code: line.language)
+        HStack(alignment: .firstTextBaseline, spacing: 10 * min(scale, 2)) {
+            LanguageChip(code: line.language, scale: scale)
             VStack(alignment: .leading, spacing: 4) { content }
                 .textSelection(.enabled)
         }
@@ -420,25 +436,25 @@ struct LineView: View {
             Text(line.source).font(plain).italic().foregroundStyle(.secondary)
         case .language?:
             Text(line.source).font(plain).foregroundStyle(.tertiary)
-            Text("Skipped: not one of your languages").font(.caption).foregroundStyle(.tertiary)
+            Text("Skipped: not one of your languages").font(note).foregroundStyle(.tertiary)
         case .unclear?:
             Label {
                 Text(line.translation ?? "Please repeat this piece.")
             } icon: {
                 Image(systemName: "questionmark.circle").foregroundStyle(.orange)
             }
-            .font(prominent ? (roomy ? .title2.weight(.medium) : .title3.weight(.medium)) : plain)
+            .font(prominent ? sized(roomy ? title2 : title3, .medium) : plain)
             Text(line.source).font(under).foregroundStyle(.secondary)
         case nil:
             if let translation = line.translation {
                 Text(translation).font(prominent ? lead : plain)
                 if prominent {
                     Text(line.source).font(under).foregroundStyle(.secondary)
-                    if line.brief { Text("Shortened to catch up").font(.caption).foregroundStyle(.tertiary) }
+                    if line.brief { Text("Shortened to catch up").font(note).foregroundStyle(.tertiary) }
                 }
             } else {
-                Text(line.source).font(prominent ? (roomy ? .title2 : .title3) : plain).foregroundStyle(.secondary)
-                Text(isLive ? "Translating…" : "Stopped before translation").font(.caption).foregroundStyle(.tertiary)
+                Text(line.source).font(prominent ? sized(roomy ? title2 : title3) : plain).foregroundStyle(.secondary)
+                Text(isLive ? "Translating…" : "Stopped before translation").font(note).foregroundStyle(.tertiary)
             }
         }
     }
@@ -447,11 +463,14 @@ struct LineView: View {
 /// Who spoke a line: "PL", "HU". Blank when the detector wasn't sure.
 struct LanguageChip: View {
     let code: String?
+    var scale = 1.0
+    /// Grows more gently than the text beside it: a label, not the content.
+    private var grow: CGFloat { CGFloat(scale.squareRoot()) }
     var body: some View {
         Text(code?.uppercased() ?? "")
-            .font(.caption2.weight(.semibold)).monospaced()
+            .font(.system(size: 11 * grow, weight: .semibold)).monospaced()
             .foregroundStyle(.secondary)
-            .frame(width: 28, height: 18)
+            .frame(width: 28 * grow, height: 18 * grow)
             .background(code == nil ? Color.clear : InterfaceStyle.surface, in: RoundedRectangle(cornerRadius: 5))
             .accessibilityHidden(code == nil)
             .accessibilityLabel(code.map { Languages.names[$0] ?? $0 } ?? "")
@@ -587,6 +606,7 @@ struct PhoneOutput: Equatable {
 /// and a way to stop. A tap anywhere else brings the screen back.
 struct DarkScreen: View {
     let session: LiveSession
+    @AppStorage(TextSize.key) private var scale = 1.0
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -596,7 +616,8 @@ struct DarkScreen: View {
             VStack(spacing: 28) {
                 Spacer()
                 Text(latest?.translation ?? "Listening")
-                    .font(ThisDevice.isPad ? .largeTitle.weight(.medium) : .title2.weight(.medium))
+                    .font(.system(size: (ThisDevice.isPad ? 34 : 22) * scale, weight: .medium))
+                    .minimumScaleFactor(0.3)
                     .foregroundStyle(Color(white: 0.5))
                     .multilineTextAlignment(.center)
                 Spacer()
