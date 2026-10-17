@@ -346,3 +346,15 @@ meaning nor establish general translation accuracy.
 ## Not yet
 
 - Any → any.
+
+## Licence
+
+The interpreter's source is licensed under the GNU General Public License,
+version 3 ([LICENSE](LICENSE)), as are voice-core and voice-polyglot, which
+it builds on, and espeak-ng and Piper inside them.
+
+The models it downloads are not part of this repository and keep their own
+terms: Parakeet Ultra (CC BY 4.0), TranslateGemma (Gemma terms), EuroLLM
+(Apache 2.0), Silero VAD (MIT). The snepssen voice is covered in
+voice-polyglot's README: it was trained on Suno-generated speech, and is not
+licensed for redistribution until Suno has said it may be.
