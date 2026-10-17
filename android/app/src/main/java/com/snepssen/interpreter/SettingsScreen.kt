@@ -46,11 +46,11 @@ fun ModelPicker(session: Session) {
         Column(Modifier.widthIn(max = 560.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Choose a translator", style = MaterialTheme.typography.headlineSmall)
             if (recommended == null) {
-                Text("This phone doesn't have the memory to translate on the device: even the smallest model needs 4 GB. " +
-                     "Interpreter keeps everything on the phone, so it can't run here.",
+                Text("This ${session.device} doesn't have the memory to translate on the device: even the smallest model needs 4 GB. " +
+                     "Interpreter keeps everything on the ${session.device}, so it can't run here.",
                      color = MaterialTheme.colorScheme.error)
             } else {
-                Text("Everything runs on this phone: speech, translation and the voice. The translator is a one-time " +
+                Text("Everything runs on this ${session.device}: speech, translation and the voice. The translator is a one-time " +
                      "download; speech recognition (${size(session, 670_576_886)}) comes with it. Use Wi-Fi.",
                      color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -69,7 +69,7 @@ private fun ModelCard(session: Session, model: TranslationModel, recommended: Bo
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(model.title, style = MaterialTheme.typography.titleMedium)
-                    Text(model.tagline + if (recommended) " · Recommended for this phone" else "",
+                    Text(model.tagline + if (recommended) " · Recommended for this ${session.device}" else "",
                          style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                 }
                 when {
@@ -81,11 +81,11 @@ private fun ModelCard(session: Session, model: TranslationModel, recommended: Bo
             }
             if (progress != null) LinearProgressIndicator(progress = { progress.toFloat() }, modifier = Modifier.fillMaxWidth())
             Text(model.summary, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!fits) Text("This phone has too little memory for it.", style = MaterialTheme.typography.bodySmall,
+            if (!fits) Text("This ${session.device} has too little memory for it.", style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.error)
             if (downloaded && progress == null) {
                 TextButton(onClick = { session.delete(model) }, enabled = !session.busy && !session.isLive,
-                           modifier = Modifier.padding(0.dp)) { Text("Delete from this phone") }
+                           modifier = Modifier.padding(0.dp)) { Text("Delete from this ${session.device}") }
             }
         }
     }
@@ -106,7 +106,7 @@ fun SettingsScreen(session: Session, onDone: () -> Unit) {
                verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Header("Translator")
             for (model in TranslationModel.entries) ModelCard(session, model, session.recommended == model)
-            Footer("One model is loaded at a time. TranslateGemma translates best; EuroLLM is for phones that can't run it.")
+            Footer("One model is loaded at a time. TranslateGemma translates best; EuroLLM is for phones and tablets that can't run it.")
 
             Header("Language")
             for (code in session.targetChoices) {
@@ -125,17 +125,19 @@ fun SettingsScreen(session: Session, onDone: () -> Unit) {
             Slider(value = session.voiceVolume, onValueChange = { session.chooseVolume(it) }, enabled = !session.captionsOnly)
             Toggle("Captions only", session.captionsOnly) { session.chooseCaptionsOnly(it) }
             Toggle("Summarise to keep up", false, enabled = false) {}
-            Footer("Captions only shows translations without speaking them: for a phone on the table when nobody has " +
+            Footer("Captions only shows translations without speaking them: for a ${session.device} on the table when nobody has " +
                    "headphones. Summarise to keep up says only the gist when the interpreter falls behind; it needs a " +
                    "model that takes instructions, and neither translator on Android does: everything is translated " +
                    "in full and the voice only speeds up a little.")
 
             Header("Conversation")
+            TextSizeControl(session)
             Toggle("Show lines already in ${session.languageName(session.target)}", session.showOwnLanguage) { session.chooseShowOwnLanguage(it) }
             OutlinedButton(onClick = { session.clear() }, enabled = session.lines.isNotEmpty() && !session.isLive) {
                 Text("Clear conversation")
             }
-            Footer("Speech, translations and models stay on this phone.")
+            Footer("Text size makes the conversation larger or smaller, up to four times, on top of the system's own " +
+                   "font size. Speech, translations and models stay on this ${session.device}.")
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Footer("The voice: snepssen, a Piper voice reading through espeak-ng (GPL-3.0). Speech recognition: Parakeet Ultra " +
                    "(moondream, CC-BY-4.0). Translation: TranslateGemma (Google, Gemma terms) or EuroLLM " +
@@ -154,7 +156,7 @@ private fun Footer(text: String) =
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
 @Composable
-private fun Toggle(label: String, on: Boolean, enabled: Boolean = true, change: (Boolean) -> Unit) {
+internal fun Toggle(label: String, on: Boolean, enabled: Boolean = true, change: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         Switch(checked = on, onCheckedChange = change, enabled = enabled)

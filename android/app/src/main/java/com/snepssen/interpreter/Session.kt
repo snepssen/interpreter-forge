@@ -94,6 +94,8 @@ class Session(application: Application) : AndroidViewModel(application) {
     var captionsOnly by mutableStateOf(prefs.getBoolean("captionsOnly", false)); private set
     var voiceVolume by mutableStateOf(prefs.getFloat("voiceVolume", 1f)); private set
     var showOwnLanguage by mutableStateOf(prefs.getBoolean("showOwnLanguage", true)); private set
+    /** How big the conversation's text is, on top of the system's font size. */
+    var textScale by mutableStateOf(prefs.getFloat("textScale", 1f)); private set
     var translationModel by mutableStateOf(prefs.getString("translationModel", null)
         ?.let { runCatching { TranslationModel.valueOf(it) }.getOrNull() }); private set
 
@@ -101,6 +103,8 @@ class Session(application: Application) : AndroidViewModel(application) {
     fun isTrained(code: String) = code in trainedTargets
     fun languageName(code: String) = Languages.names[code] ?: code
     val isLive get() = phase == Phase.Live
+    /** What to call this device in labels: "this tablet", "this phone". */
+    val device = if (application.resources.configuration.smallestScreenWidthDp >= 600) "tablet" else "phone"
 
     fun chooseTarget(code: String) {
         if (code == target || isLive || busy) return
@@ -136,6 +140,12 @@ class Session(application: Application) : AndroidViewModel(application) {
     fun chooseShowOwnLanguage(on: Boolean) {
         showOwnLanguage = on
         prefs.edit().putBoolean("showOwnLanguage", on).apply()
+    }
+
+    /** One step smaller (-1) or larger (+1). */
+    fun stepTextScale(by: Int) {
+        textScale = TextSize.step(textScale, by)
+        prefs.edit().putFloat("textScale", textScale).apply()
     }
 
     private fun applyLanguages() {
@@ -242,7 +252,7 @@ class Session(application: Application) : AndroidViewModel(application) {
             } }
             phase = Phase.Ready
         } catch (e: OutOfMemoryError) {
-            phase = Phase.Failed("This phone ran out of memory loading the models. Close other apps and try again" +
+            phase = Phase.Failed("This $device ran out of memory loading the models. Close other apps and try again" +
                                  if (translationModel == TranslationModel.TRANSLATE_GEMMA) ", or use EuroLLM." else ".")
         } catch (e: Exception) {
             phase = Phase.Failed(e.message ?: e.toString())

@@ -128,7 +128,7 @@ class Pipeline(
         const val TAG = "Pipeline"
         /** What went wrong, for the screen: out of memory said plainly, never just a class name. */
         fun describe(e: Throwable) = when (e) {
-            is OutOfMemoryError -> "this phone ran out of memory. Close other apps, or use EuroLLM."
+            is OutOfMemoryError -> "this device ran out of memory. Close other apps, or use EuroLLM."
             else -> e.message ?: e.javaClass.simpleName
         }
     }

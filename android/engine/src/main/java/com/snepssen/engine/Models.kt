@@ -29,7 +29,7 @@ enum class TranslationModel(
 ) {
     TRANSLATE_GEMMA(
         "TranslateGemma 4B", "Best translations",
-        "Google's translation model: the most accurate, natural translations, 55 languages. Needs a phone with 6 GB or more.",
+        "Google's translation model: the most accurate, natural translations, 55 languages. Needs a phone or tablet with 6 GB or more.",
         ModelFile(
             "translategemma-4b-it.Q4_K_M.gguf",
             "https://huggingface.co/mradermacher/translategemma-4b-it-GGUF/resolve/d37868f759d2f817a43d28dd80cf9f982ffa62fd/translategemma-4b-it.Q4_K_M.gguf",
@@ -37,8 +37,8 @@ enum class TranslationModel(
         memoryGB = 5.5,
     ),
     EURO_LLM(
-        "EuroLLM 1.7B", "For 4 GB phones",
-        "A small European model for phones that can't run TranslateGemma: rougher translations, the gist rather than every word, in the 24 EU languages.",
+        "EuroLLM 1.7B", "For 4 GB phones and tablets",
+        "A small European model for phones and tablets that can't run TranslateGemma: rougher translations, the gist rather than every word, in the 24 EU languages.",
         ModelFile(
             "EuroLLM-1.7B-Instruct.Q4_K_M.gguf",
             "https://huggingface.co/mradermacher/EuroLLM-1.7B-Instruct-GGUF/resolve/2951f08f66429c934c8b01a94347161362430808/EuroLLM-1.7B-Instruct.Q4_K_M.gguf",

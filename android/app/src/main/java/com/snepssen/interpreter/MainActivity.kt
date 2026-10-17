@@ -3,6 +3,7 @@ package com.snepssen.interpreter
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -25,8 +26,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.snepssen.engine.Recording
 import com.snepssen.engine.Wav
 import java.io.File
@@ -48,6 +53,17 @@ class MainActivity : ComponentActivity() {
             val colors = if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             MaterialTheme(colorScheme = colors) {
                 var settings by rememberSaveable { mutableStateOf(false) }
+                var dark by rememberSaveable { mutableStateOf(false) }
+                LaunchedEffect(session.isLive) { if (!session.isLive) dark = false }
+                // Dark: the bars hidden and the backlight down, for an LCD's sake too.
+                LaunchedEffect(dark) {
+                    val bars = WindowCompat.getInsetsController(window, window.decorView)
+                    bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    if (dark) bars.hide(WindowInsetsCompat.Type.systemBars()) else bars.show(WindowInsetsCompat.Type.systemBars())
+                    window.attributes = window.attributes.apply {
+                        screenBrightness = if (dark) 0.01f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    }
+                }
                 // Interpreting is foreground-only: the screen stays on while live,
                 // and while models download (a sleeping phone may drop its Wi-Fi).
                 val awake = session.isLive || session.downloads.isNotEmpty() || session.hearingDownload != null
@@ -55,10 +71,11 @@ class MainActivity : ComponentActivity() {
                     if (awake) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
-                BackHandler(enabled = settings) { settings = false }
-                Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
+                BackHandler(enabled = settings || dark) { if (dark) dark = false else settings = false }
+                if (dark) DarkScreen(session, roomy = LocalConfiguration.current.smallestScreenWidthDp >= 600) { dark = false }
+                else Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
                     if (settings) SettingsScreen(session) { settings = false }
-                    else InterpreterScreen(session, onLive = ::live, onSettings = { settings = true })
+                    else InterpreterScreen(session, onLive = ::live, onSettings = { settings = true }, onDark = { dark = true })
                 }
             }
         }
@@ -76,6 +93,13 @@ class MainActivity : ComponentActivity() {
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) session.start()
         else microphone.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    /** Ctrl and minus or plus, on a tablet's keyboard: the text size. */
+    override fun onKeyShortcut(keyCode: Int, event: KeyEvent): Boolean = when (keyCode) {
+        KeyEvent.KEYCODE_MINUS, KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> { session.stepTextScale(-1); true }
+        KeyEvent.KEYCODE_PLUS, KeyEvent.KEYCODE_EQUALS, KeyEvent.KEYCODE_NUMPAD_ADD -> { session.stepTextScale(1); true }
+        else -> super.onKeyShortcut(keyCode, event)
     }
 
     override fun onStart() {

@@ -33,7 +33,7 @@ object ModelStore {
         folder.mkdirs()
         val needed = remaining(folder, files) + alsoNeeded + (200L shl 20)  // and room to spare
         if (folder.usableSpace < needed) {
-            throw IOException("Not enough free space: this needs %.1f GB, and the phone has %.1f GB free. Free some up and try again."
+            throw IOException("Not enough free space: this needs %.1f GB, and the device has %.1f GB free. Free some up and try again."
                 .format(needed / 1e9, folder.usableSpace / 1e9))
         }
         try { fetchAll(folder, files, progress) } catch (e: java.net.UnknownHostException) {
