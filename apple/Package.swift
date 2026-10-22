@@ -17,6 +17,9 @@ let package = Package(
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.5"),
         .package(url: "https://github.com/huggingface/swift-huggingface", from: "1.0.0"),
         .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.20.0"),
+        // NSException to NSError, for AVAudioEngine, which raises instead of throwing.
+        // The two files lived in Sources/ObjCExceptions; speech-core 0.1.0 is that copy.
+        .package(url: "https://github.com/snepssen/speech-core", from: "0.1.0"),
         // The speech engine Voice Forge and Gateway Forge share: espeak-ng and
         // its data, the phonemizer, Polyphon and Piper inference. Bumped by
         // voice-core's release script, which runs these checks first.
@@ -34,12 +37,11 @@ let package = Package(
         .target(name: "InterpreterCore"),
         // Never links a model; `swift run tccheck` stays fast and runs anywhere.
         .executableTarget(name: "tccheck", dependencies: ["InterpreterCore"]),
-        // NSException to NSError, for AVAudioEngine, which raises instead of throwing.
-        .target(name: "ObjCExceptions"),
         // The models and the live loop: Parakeet and VAD (FluidAudio, ONNX),
         // the translation model (MLX), the voice (voice-core's Piper on ONNX).
         .target(name: "InterpreterEngine", dependencies: [
-            "InterpreterCore", "ObjCExceptions",
+            "InterpreterCore",
+            .product(name: "ObjCExceptions", package: "speech-core"),
             .product(name: "VoiceCore", package: "voice-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "FluidAudio", package: "FluidAudio"),
