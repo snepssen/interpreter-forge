@@ -1,6 +1,7 @@
 @preconcurrency import AVFoundation
 import Foundation
 import InterpreterCore
+import SileroVAD
 
 /// What happens to the speech, as it happens.
 public enum PipelineEvent: Sendable {

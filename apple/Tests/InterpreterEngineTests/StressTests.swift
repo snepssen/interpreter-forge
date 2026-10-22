@@ -1,5 +1,6 @@
 import Foundation
 import InterpreterCore
+import SileroVAD
 import XCTest
 @testable import InterpreterEngine
 
