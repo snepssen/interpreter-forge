@@ -1,4 +1,5 @@
 import Foundation
+import ModelStore
 
 /// A translation model the app can download, pinned to a revision.
 ///
@@ -25,11 +26,6 @@ public struct TranslationModel: Identifiable, Hashable, Sendable {
         case euroLLM
     }
 
-    public struct File: Hashable, Sendable {
-        let name: String
-        let size: Int64
-    }
-
     public let id: String  // folder name, and what is remembered as the choice
     public let name: String
     /// A few words for a settings row.
@@ -40,7 +36,7 @@ public struct TranslationModel: Identifiable, Hashable, Sendable {
     public let style: Style
     /// Peak memory while translating, measured on a Mac; what a phone must spare.
     public let memoryGB: Double
-    let files: [File]
+    public let files: [ModelFile]
 
     public var download: Int64 { files.reduce(0) { $0 + $1.size } }
     public var judges: Bool { style == .instructions }
@@ -56,6 +52,8 @@ public struct TranslationModel: Identifiable, Hashable, Sendable {
         #endif
     }
 }
+
+extension TranslationModel: StoredModel {}
 
 public enum ModelCatalog {
     public static let translation: [TranslationModel] = [
@@ -137,7 +135,7 @@ public enum ModelCatalog {
     public static var offered: [TranslationModel] {
         let standard = translation + gemma4
         if !standard.contains(where: \.fits) { return [euroLLM] }
-        return standard + (ModelStore.isDownloaded(euroLLM) ? [euroLLM] : [])
+        return standard + (Resources.models.isDownloaded(euroLLM) ? [euroLLM] : [])
     }
 
     public static var recommended: TranslationModel { translation[0].fits ? translation[0] : offered[0] }

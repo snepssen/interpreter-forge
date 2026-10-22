@@ -2,6 +2,7 @@ import AVFoundation
 import FluidAudio
 import Foundation
 import InterpreterCore
+import ModelStore
 import Observation
 import VoiceCore
 
@@ -192,7 +193,7 @@ public final class LiveSession {
         await shutdownTask?.value
         guard generation == self.generation, active, !Task.isCancelled, preparationID == nil else { return }
         guard phase == .idle || phase == .choosingModel || phase.isFailure else { return }
-        guard let model = translationModel, let modelURL = ModelStore.location(of: model) else {
+        guard let model = translationModel, let modelURL = Resources.models.location(of: model) else {
             phase = .choosingModel
             return
         }
@@ -367,12 +368,12 @@ public final class LiveSession {
             storeChanges += 1
         }
         do {
-            try await ModelStore.download(model) { fraction in
+            try await Resources.models.download(model) { fraction in
                 Task { @MainActor in
                     if self.downloads[model.id] != nil { self.downloads[model.id] = fraction }
                 }
             }
-            if translationModel == nil || ModelStore.location(of: translationModel!) == nil { await use(model) }
+            if translationModel == nil || Resources.models.location(of: translationModel!) == nil { await use(model) }
         } catch {
             notice = "Couldn't download \(model.name): \(error.localizedDescription)"
         }
@@ -399,7 +400,7 @@ public final class LiveSession {
             UserDefaults.standard.removeObject(forKey: "translationModel")
             phase = .choosingModel
         }
-        do { try ModelStore.delete(model) } catch { notice = "Couldn't delete \(model.name): \(error.localizedDescription)" }
+        do { try Resources.models.delete(model) } catch { notice = "Couldn't delete \(model.name): \(error.localizedDescription)" }
         storeChanges += 1
     }
 

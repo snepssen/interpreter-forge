@@ -9,6 +9,7 @@ import FluidAudio
 import Foundation
 import InterpreterCore
 import InterpreterEngine
+import ModelStore
 
 var args = Array(CommandLine.arguments.dropFirst())
 @MainActor func option(_ name: String) -> String? {
@@ -34,7 +35,7 @@ func info(_ message: String) { FileHandle.standardError.write(Data("· \(message
 
 let samples = try AudioConverter().resampleAudioFile(inputURL)
 info(String(format: "%@: %.1f s", inputURL.lastPathComponent, Double(samples.count) / 16_000))
-guard let model = ModelCatalog.model(modelID), let modelURL = ModelStore.location(of: model),
+guard let model = ModelCatalog.model(modelID), let modelURL = Resources.models.location(of: model),
       let voiceURL = Resources.voice, let espeak = Resources.espeakData, let vad = Resources.vad else {
     print("missing: translation model \(modelID) (one of \(ModelCatalog.translation.map(\.id))), voice \(Resources.voice != nil), VAD \(Resources.vad != nil)")
     exit(1)

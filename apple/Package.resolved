@@ -1,5 +1,5 @@
 {
-  "originHash" : "5ea31810a2fe7fa909d93e421a3b03e35d50ec127959232244bc3e0ada96bc8c",
+  "originHash" : "334ec8d30a3076d107659e9674530be9c92c8b36017bd97f93436fc017309728",
   "pins" : [
     {
       "identity" : "argmax-oss-swift",
@@ -60,8 +60,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/snepssen/speech-core",
       "state" : {
-        "revision" : "9cf029043fce7d54c9bc424505ec9a2b38b57859",
-        "version" : "0.3.0"
+        "revision" : "e999ee81028198712735290a3ca98d26a74ecf4b",
+        "version" : "0.4.0"
       }
     },
     {

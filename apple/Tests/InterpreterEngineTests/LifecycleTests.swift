@@ -1,5 +1,6 @@
 import Foundation
 import InterpreterCore
+import ModelStore
 import SampleBuffer
 import SileroVAD
 @testable import MLXLMCommon
@@ -130,12 +131,13 @@ final class LifecycleTests: XCTestCase {
         let model = TranslationModel(id: "test", name: "Test", tagline: "", summary: "", repo: "", revision: "",
                                      style: .instructions, memoryGB: 0,
                                      files: [.init(name: "weights", size: 3), .init(name: "config", size: 2)])
+        let store = ModelStore(directory: folder)
         try Data([1, 2, 3]).write(to: folder.appending(path: "weights"))
-        XCTAssertNil(ModelStore.location(of: model, in: [folder]))
+        XCTAssertNil(store.location(of: model, in: [folder]))
         try Data([1]).write(to: folder.appending(path: "config"))
-        XCTAssertNil(ModelStore.location(of: model, in: [folder]))
+        XCTAssertNil(store.location(of: model, in: [folder]))
         try Data([1, 2]).write(to: folder.appending(path: "config"))
-        XCTAssertEqual(ModelStore.location(of: model, in: [folder]), folder)
+        XCTAssertEqual(store.location(of: model, in: [folder]), folder)
     }
 
     func testVoiceProducesFiniteAudio() throws {

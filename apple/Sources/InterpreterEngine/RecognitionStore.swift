@@ -1,11 +1,12 @@
 import FluidAudio
 import Foundation
+import ModelStore
 import WhisperKit
 
 /// App-owned, persistent Whisper files, with a completion record written only
 /// after the models and tokenizer load. Cached launches never contact the Hub.
-enum RecognitionStore {
-    static var whisperBase: URL { ModelStore.directory.appending(path: "Recognition/Whisper") }
+public enum RecognitionStore {
+    static var whisperBase: URL { Resources.models.directory.appending(path: "Recognition/Whisper") }
     static var whisperFolder: URL {
         whisperBase.appending(path: "models/argmaxinc/whisperkit-coreml/openai_whisper-\(RecognitionModel.whisperVariant)")
     }
@@ -16,7 +17,7 @@ enum RecognitionStore {
               let files = try? JSONDecoder().decode([File].self, from: data), !files.isEmpty else { return false }
         return files.allSatisfy {
             !$0.path.hasPrefix("/") && !$0.path.split(separator: "/").contains("..") &&
-            $0.size > 0 && ModelStore.fileSize(root.appending(path: $0.path)) == $0.size
+            $0.size > 0 && ModelStore.byteCount(root.appending(path: $0.path)) == $0.size
         }
     }
 
@@ -47,7 +48,7 @@ enum RecognitionStore {
         try folder.setResourceValues(values)
     }
 
-    static func size(of model: RecognitionModel) -> Int64? {
+    public static func size(of model: RecognitionModel) -> Int64? {
         let folder = model == .parakeetUltra ? AsrModels.defaultCacheDirectory(for: .ultra) : whisperBase
         let bytes = manifest(in: folder).map(\.size).reduce(0, +)
         return bytes > 0 ? bytes : nil

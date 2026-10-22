@@ -1,5 +1,6 @@
 import InterpreterCore
 import InterpreterEngine
+import ModelStore
 import SwiftUI
 
 /// Everything that isn't the conversation: models, the voice, the transcript.
@@ -128,7 +129,7 @@ private struct TranslatorRow: View {
 
     var body: some View {
         let _ = session.storeChanges
-        let downloaded = ModelStore.isDownloaded(model)
+        let downloaded = Resources.models.isDownloaded(model)
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(model.name)
@@ -180,7 +181,7 @@ private struct TranslatorDetail: View {
 
     var body: some View {
         let _ = session.storeChanges
-        let downloaded = ModelStore.isDownloaded(model)
+        let downloaded = Resources.models.isDownloaded(model)
         let inUse = downloaded && session.translationModel == model
         Form {
             Section { Text(model.summary) }
@@ -206,7 +207,7 @@ private struct TranslatorDetail: View {
                 } else {
                     Text("Needs more memory than this device has").foregroundStyle(.secondary)
                 }
-                if ModelStore.isDeletable(model), session.downloads[model.id] == nil {
+                if Resources.models.isDeletable(model), session.downloads[model.id] == nil {
                     Button("Delete download", role: .destructive) { confirmingDelete = true }
                         .disabled(session.isLive || session.isBusy)
                 }
@@ -237,7 +238,7 @@ private struct RecognizerDetail: View {
             Section {
                 LabeledContent("Languages", value: "\(model.languageNames.count)")
                 LabeledContent("Download", value: "about " + gigabytes(model.download))
-                if let bytes = ModelStore.recognitionSize(model) {
+                if let bytes = RecognitionStore.size(of: model) {
                     LabeledContent("Stored on this device", value: gigabytes(bytes))
                 }
             }
