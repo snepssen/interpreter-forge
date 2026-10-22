@@ -203,7 +203,11 @@ private struct TranslatorDetail: View {
                     Button("Use \(model.name)") { Task { await session.use(model) } }
                         .disabled(session.isBusy)
                 } else if model.fits {
+                    #if os(macOS) && !DEBUG
+                    Button("Where \(model.name) should be") { Task { await session.download(model) } }
+                    #else
                     Button("Download \(gigabytes(model.download))") { Task { await session.download(model) } }
+                    #endif
                 } else {
                     Text("Needs more memory than this device has").foregroundStyle(.secondary)
                 }

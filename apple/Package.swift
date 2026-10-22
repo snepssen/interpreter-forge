@@ -20,9 +20,10 @@ let package = Package(
         // AVAudioEngine's NSException into an NSError. SileroVAD (0.2.0) is the
         // v5 detector; the weights stay in the app as silero_vad.onnx.
         // SampleBuffer (0.3.0) is the 16 kHz window. ModelStore (0.4.0) finds
-        // and fetches a pinned model; the catalogue stays here. ONNX Runtime
-        // comes with this package and with voice-core.
-        .package(url: "https://github.com/snepssen/speech-core", from: "0.4.0"),
+        // and fetches a pinned model; 0.4.1 adds the shared folder. The
+        // catalogue stays here. ONNX Runtime comes with this package and
+        // with voice-core.
+        .package(url: "https://github.com/snepssen/speech-core", from: "0.4.1"),
         // The speech engine Voice Forge and Gateway Forge share: espeak-ng and
         // its data, the phonemizer, Polyphon and Piper inference. Bumped by
         // voice-core's release script, which runs these checks first.
