@@ -6,7 +6,13 @@ import WhisperKit
 /// App-owned, persistent Whisper files, with a completion record written only
 /// after the models and tokenizer load. Cached launches never contact the Hub.
 public enum RecognitionStore {
-    static var whisperBase: URL { Resources.models.directory.appending(path: "Recognition/Whisper") }
+    /// Whisper is not a catalogue model. It stays in the app's own cache,
+    /// not in the shared folder Release uses for translation models, and
+    /// not in FluidAudio's Parakeet cache.
+    static var whisperBase: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "Interpreter/Models/Recognition/Whisper")
+    }
     static var whisperFolder: URL {
         whisperBase.appending(path: "models/argmaxinc/whisperkit-coreml/openai_whisper-\(RecognitionModel.whisperVariant)")
     }

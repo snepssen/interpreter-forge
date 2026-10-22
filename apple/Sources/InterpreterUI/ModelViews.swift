@@ -16,8 +16,17 @@ struct ModelPicker: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Choose your translator").font(.title2.bold())
+                #if DEBUG
                 Text("Everything runs on this device. Download a translation model to start; speech recognition follows by itself.")
                     .foregroundStyle(.secondary)
+                #else
+                if let failure = Resources.modelsUnavailable {
+                    Text(failure).foregroundStyle(.secondary)
+                } else {
+                    Text("Everything runs on this device. A release looks only in \(Resources.models.directory.path), and does not download a model that is not already there.")
+                        .foregroundStyle(.secondary)
+                }
+                #endif
             }
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
@@ -73,10 +82,17 @@ private struct PickerAction: View {
             Label("Needs more memory than this device has", systemImage: "memorychip")
                 .font(.callout).foregroundStyle(.secondary)
         } else {
+            #if DEBUG
             Button { Task { await session.download(model) } } label: {
                 Label("Download · \(gigabytes(model.download))", systemImage: "arrow.down.circle").frame(minHeight: 28)
             }
             .buttonStyle(.borderedProminent)
+            #else
+            Button { Task { await session.download(model) } } label: {
+                Label("Where \(model.name) should be", systemImage: "folder").frame(minHeight: 28)
+            }
+            .buttonStyle(.borderedProminent)
+            #endif
         }
     }
 }

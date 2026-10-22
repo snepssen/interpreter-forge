@@ -102,6 +102,33 @@ skip the model downloader. An interrupted download cannot mark the cache complet
 The installer has no uninstall step. An in-place update was checked on the
 phone: all 35 recognition-file entries retained their paths, sizes and
 modification dates, and the user confirmed Ready without another download.
+
+## Shared translation models
+
+A Release build reads translation models only from the shared folder, and
+does not download, move, or delete them. Each model is a directory named
+with its id:
+
+    ~/Library/Application Support/snepssen/models/<model id>/<file>
+
+On iOS the same layout is the `models` directory inside the
+`group.com.snepssen.models` app-group container. Debug builds still look in
+`~/Library/Application Support/Interpreter/Models` and in this checkout's
+`models/`.
+
+The ids this app expects there:
+
+- `translategemma-4b-it-4bit`
+- `qwen3-4b-instruct-2507-4bit`
+- `gemma-4-e4b-it-4bit`
+- `gemma-4-e2b-it-4bit`
+- `eurollm-1.7b-instruct-4bit`
+
+Parakeet Ultra is not one of those. FluidAudio keeps it in its own cache,
+`~/Library/Application Support/FluidAudio/Models/parakeet-ultra-coreml`.
+Whisper stays in
+`~/Library/Application Support/Interpreter/Models/Recognition/Whisper`.
+
 Download progress is shown only during
 model fetching; loading cached models is labelled “Loading speech recognition”.
 The storage display reads the same directory as the recognizer. To check

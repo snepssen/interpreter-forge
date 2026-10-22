@@ -198,10 +198,29 @@ public final class LiveSession {
         await shutdownTask?.value
         guard generation == self.generation, active, !Task.isCancelled, preparationID == nil else { return }
         guard phase == .idle || phase == .choosingModel || phase.isFailure else { return }
-        guard let model = translationModel, let modelURL = Resources.models.location(of: model) else {
+        guard let model = translationModel else {
             phase = .choosingModel
             return
         }
+        let modelURL: URL
+        #if DEBUG
+        guard let found = Resources.models.location(of: model) else {
+            phase = .choosingModel
+            return
+        }
+        modelURL = found
+        #else
+        if let failure = Resources.modelsUnavailable {
+            phase = .choosingModel
+            notice = failure
+            return
+        }
+        do { modelURL = try Resources.models.require(model) } catch {
+            phase = .choosingModel
+            notice = error.localizedDescription
+            return
+        }
+        #endif
         let preparation = UUID()
         preparationID = preparation
         let loading = Task { await load(model, at: modelURL, preparation: preparation) }
@@ -373,6 +392,9 @@ public final class LiveSession {
             storeChanges += 1
         }
         do {
+            #if !DEBUG
+            if let failure = Resources.modelsUnavailable { throw Problem(failure) }
+            #endif
             try await Resources.models.download(model) { fraction in
                 Task { @MainActor in
                     if self.downloads[model.id] != nil { self.downloads[model.id] = fraction }
@@ -380,7 +402,13 @@ public final class LiveSession {
             }
             if translationModel == nil || Resources.models.location(of: translationModel!) == nil { await use(model) }
         } catch {
+            #if DEBUG
             notice = "Couldn't download \(model.name): \(error.localizedDescription)"
+            #else
+            // A Release store refuses to fetch. The error names the file that
+            // should already be in the shared folder.
+            notice = error.localizedDescription
+            #endif
         }
     }
 

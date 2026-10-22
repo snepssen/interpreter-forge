@@ -11,13 +11,31 @@ public enum Resources {
     static let voiceForge = checkout.deletingLastPathComponent().appending(path: "voice-forge")
     static let voicePolyglot = checkout.deletingLastPathComponent().appending(path: "voice-polyglot")
 
-    /// Application Support/Interpreter/Models, then this checkout's models/.
-    /// A copy found in the checkout is used as it is and never deleted.
+    /// Where translation models are read from.
+    ///
+    /// Debug keeps Application Support/Interpreter/Models, then this checkout's
+    /// models/. A Release build reads only `ModelStore.sharedRoot()` — on a
+    /// Mac, ~/Library/Application Support/snepssen/models — and never
+    /// downloads, moves, or deletes. `release(at:)` is what makes that store
+    /// read-only; the app's own DEBUG flag chooses it, because a package
+    /// cannot see that flag.
+    #if DEBUG
     public static let models = ModelStore(
         directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appending(path: "Interpreter/Models"),
         alsoSearching: [checkout.appending(path: "models")],
         leaveLinks: false)
+    #else
+    private static let releaseModels: (store: ModelStore, failure: String?) = {
+        do { return (ModelStore.release(at: try ModelStore.sharedRoot()), nil) } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return (ModelStore.release(at: URL(fileURLWithPath: "/")), message)
+        }
+    }()
+    public static var models: ModelStore { releaseModels.store }
+    /// Set when the shared folder cannot be opened, naming where it should be.
+    public static var modelsUnavailable: String? { releaseModels.failure }
+    #endif
     static let voiceName = "en_US-snepssen-medium.onnx"
     static let polyglotName = "snepssen-polyglot.onnx"
 
