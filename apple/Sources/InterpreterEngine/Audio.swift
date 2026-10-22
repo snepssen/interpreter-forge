@@ -1,49 +1,10 @@
 @preconcurrency import AVFoundation
 import Foundation
 import ObjCExceptions
+import SampleBuffer
 #if os(macOS)
 import CoreAudio
 #endif
-
-/// Samples the microphone has delivered, 16 kHz mono, shared between the audio
-/// thread that appends and the listener that reads.
-public final class SampleBuffer: @unchecked Sendable {
-    private let lock = NSLock()
-    private var samples: [Float] = []
-    private var base = 0  // stream index of samples[0]
-    private var rms: Float = 0
-    public var level: Float { lock.withLock { rms } }
-
-    public var count: Int { lock.withLock { base + samples.count } }
-
-    func append(_ block: [Float]) {
-        let rms = block.isEmpty ? 0 : (block.reduce(0) { $0 + $1 * $1 } / Float(block.count)).squareRoot()
-        lock.withLock {
-            samples += block
-            self.rms = rms
-        }
-    }
-
-    /// Stream samples from `start` to `end`, whatever of them is still held.
-    public func read(_ start: Int, _ end: Int) -> [Float] {
-        lock.withLock {
-            let lo = max(start, base) - base
-            let hi = min(end, base + samples.count) - base
-            return lo < hi ? Array(samples[lo..<hi]) : []
-        }
-    }
-
-    /// Let go of everything before stream index `index`.
-    public func drop(before index: Int) {
-        lock.withLock {
-            let n = min(max(0, index - base), samples.count)
-            samples.removeFirst(n)
-            base += n
-        }
-    }
-
-    public func everything() -> [Float] { lock.withLock { samples } }
-}
 
 public enum AudioFailure: LocalizedError {
     case noInput

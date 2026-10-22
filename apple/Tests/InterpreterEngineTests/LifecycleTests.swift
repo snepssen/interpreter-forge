@@ -1,5 +1,6 @@
 import Foundation
 import InterpreterCore
+import SampleBuffer
 import SileroVAD
 @testable import MLXLMCommon
 import XCTest

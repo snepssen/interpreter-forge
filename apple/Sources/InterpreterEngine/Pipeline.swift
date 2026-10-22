@@ -1,6 +1,7 @@
 @preconcurrency import AVFoundation
 import Foundation
 import InterpreterCore
+import SampleBuffer
 import SileroVAD
 
 /// What happens to the speech, as it happens.

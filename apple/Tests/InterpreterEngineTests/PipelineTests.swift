@@ -1,5 +1,6 @@
 import Foundation
 import InterpreterCore
+import SampleBuffer
 import XCTest
 @testable import InterpreterEngine
 

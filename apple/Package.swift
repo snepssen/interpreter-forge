@@ -18,9 +18,10 @@ let package = Package(
         .package(url: "https://github.com/huggingface/swift-huggingface", from: "1.0.0"),
         // Hearing shared with companion-forge. ObjCExceptions (0.1.0) turns
         // AVAudioEngine's NSException into an NSError. SileroVAD (0.2.0) is the
-        // v5 detector; the weights stay in the app as silero_vad.onnx. ONNX
-        // Runtime comes with this package and with voice-core.
-        .package(url: "https://github.com/snepssen/speech-core", from: "0.2.0"),
+        // v5 detector; the weights stay in the app as silero_vad.onnx.
+        // SampleBuffer (0.3.0) is the 16 kHz window. ONNX Runtime comes with
+        // this package and with voice-core.
+        .package(url: "https://github.com/snepssen/speech-core", from: "0.3.0"),
         // The speech engine Voice Forge and Gateway Forge share: espeak-ng and
         // its data, the phonemizer, Polyphon and Piper inference. Bumped by
         // voice-core's release script, which runs these checks first.
@@ -29,6 +30,7 @@ let package = Package(
     targets: [
         .testTarget(name: "InterpreterEngineTests", dependencies: [
             "InterpreterEngine", "InterpreterCore",
+            .product(name: "SampleBuffer", package: "speech-core"),
             .product(name: "SileroVAD", package: "speech-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
@@ -45,6 +47,7 @@ let package = Package(
         .target(name: "InterpreterEngine", dependencies: [
             "InterpreterCore",
             .product(name: "ObjCExceptions", package: "speech-core"),
+            .product(name: "SampleBuffer", package: "speech-core"),
             .product(name: "SileroVAD", package: "speech-core"),
             .product(name: "VoiceCore", package: "voice-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
