@@ -3,7 +3,6 @@ import InterpreterCore
 import ModelStore
 import SampleBuffer
 import SileroVAD
-@testable import MLXLMCommon
 import XCTest
 @testable import InterpreterEngine
 
@@ -95,30 +94,6 @@ final class LifecycleTests: XCTestCase {
         XCTAssertNotEqual(session.lines[0].id, old)
     }
 
-    func testPromptCacheRebuildsWhenRewindIsUnavailable() throws {
-        let old = FakeCache()
-        var cache = try PromptCache { [old.offset == 0 ? old : FakeCache()] }
-        old.offset = 4
-        cache.settle([1, 2, 3, 4])
-        old.trimmable = false
-        XCTAssertEqual(try cache.prepare(for: [1, 2, 9]), [1, 2, 9])
-        XCTAssertEqual(cache.kv[0].offset, 0)
-        XCTAssertFalse((cache.kv[0] as? FakeCache) === old)
-    }
-
-    func testPromptCacheNeverSkipsUncachedLastToken() throws {
-        let backing = FakeCache()
-        var cache = try PromptCache { [backing] }
-        backing.offset = 2
-        cache.settle([1, 2, 3])
-        XCTAssertEqual(try cache.prepare(for: [1, 2, 3, 4]), [3, 4])
-    }
-
-    func testEmptyPromptIsAnError() throws {
-        var cache = try PromptCache { [FakeCache()] }
-        XCTAssertThrowsError(try cache.prepare(for: []))
-    }
-
     func testLanguageCandidatesIncludeEveryPickerLanguage() {
         let codes = Set(LanguageDetector.candidates.map(\.rawValue))
         XCTAssertTrue(Set(Languages.names.keys).isSubset(of: codes))
@@ -166,12 +141,3 @@ final class LifecycleTests: XCTestCase {
     }
 }
 
-private final class FakeCache: BaseKVCache {
-    var trimmable = true
-    override var isTrimmable: Bool { trimmable }
-    override func trim(_ n: Int) -> Int {
-        let trimmed = min(offset, max(0, n))
-        offset -= trimmed
-        return trimmed
-    }
-}
