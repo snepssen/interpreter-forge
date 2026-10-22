@@ -1,5 +1,5 @@
 [project]
-name = "translate-core"
+name = "interpreter-forge"
 version = "0.1.0"
 description = "Live speech interpretation into English, locally: Parakeet ASR, a small LLM, Piper voices."
 readme = "README.md"
@@ -23,6 +23,9 @@ translate-core = "translate_core.cli:main"
 [build-system]
 requires = ["uv_build>=0.10.5,<0.11.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "translate_core"
 
 [dependency-groups]
 dev = [

@@ -50,7 +50,7 @@ public final class LiveSession {
     /// listener's own language is understood and kept as context, not
     /// spoken; it is always in this list, the marker the filter is read
     /// against. Remembered between launches.
-    public var languages: [String] = UserDefaults.standard.stringArray(forKey: "languages") ?? ["en"] {
+    public var languages: [String] = EarlierSettings.stringArray(forKey: "languages") ?? ["en"] {
         didSet {
             UserDefaults.standard.set(languages, forKey: "languages")
             applyLanguages()
@@ -60,7 +60,7 @@ public final class LiveSession {
     /// The language the listener hears: everything is interpreted into it and
     /// the voice speaks it. One the voice was trained on, unless untrained
     /// languages are allowed in Settings. Remembered.
-    public var target: String = UserDefaults.standard.string(forKey: "target") ?? "en" {
+    public var target: String = EarlierSettings.string(forKey: "target") ?? "en" {
         didSet {
             guard target != oldValue else { return }
             UserDefaults.standard.set(target, forKey: "target")
@@ -72,7 +72,7 @@ public final class LiveSession {
 
     /// Offer the languages the voice was not trained on: it reads them through
     /// plain espeak-ng, with an accent and no corrections. Off unless chosen.
-    public var untrainedLanguages: Bool = UserDefaults.standard.bool(forKey: "untrainedLanguages") {
+    public var untrainedLanguages: Bool = EarlierSettings.bool(forKey: "untrainedLanguages") {
         didSet {
             UserDefaults.standard.set(untrainedLanguages, forKey: "untrainedLanguages")
             if !untrainedLanguages && !Self.trainedTargets.contains(target) { target = "en" }
@@ -107,9 +107,9 @@ public final class LiveSession {
     }
     /// The translation model in use, chosen in the picker or the manager; remembered.
     public private(set) var translationModel: TranslationModel? =
-        ModelCatalog.model(UserDefaults.standard.string(forKey: "translationModel"))
+        ModelCatalog.model(EarlierSettings.string(forKey: "translationModel"))
     public private(set) var recognitionModel =
-        RecognitionModel(rawValue: UserDefaults.standard.string(forKey: "recognitionModel") ?? "") ?? .parakeetUltra
+        RecognitionModel(rawValue: EarlierSettings.string(forKey: "recognitionModel") ?? "") ?? .parakeetUltra
     public var availableLanguages: [String: String] { recognitionModel.languageNames }
     public func languageList(_ codes: [String]) -> String {
         Languages.list(codes, names: availableLanguages)
@@ -120,7 +120,7 @@ public final class LiveSession {
     public private(set) var storeChanges = 0
 
     /// How loud the interpreter speaks, from 0 to 1. Remembered.
-    public var voiceVolume: Double = UserDefaults.standard.object(forKey: "voiceVolume") as? Double ?? 1 {
+    public var voiceVolume: Double = EarlierSettings.object(forKey: "voiceVolume") as? Double ?? 1 {
         didSet {
             UserDefaults.standard.set(voiceVolume, forKey: "voiceVolume")
             applyVoice()
@@ -129,7 +129,7 @@ public final class LiveSession {
 
     /// Translations on screen only, not spoken: for when there are no
     /// headphones and the phone's speaker would talk over the room. Remembered.
-    public var captionsOnly: Bool = UserDefaults.standard.bool(forKey: "captionsOnly") {
+    public var captionsOnly: Bool = EarlierSettings.bool(forKey: "captionsOnly") {
         didSet {
             UserDefaults.standard.set(captionsOnly, forKey: "captionsOnly")
             applyVoice()
@@ -139,7 +139,7 @@ public final class LiveSession {
     /// Say the gist instead of the whole translation when falling behind:
     /// for following a long story as it goes rather than hearing all of it.
     /// Needs a model that takes instructions. Off unless chosen; remembered.
-    public var summarises: Bool = UserDefaults.standard.bool(forKey: "summarises") {
+    public var summarises: Bool = EarlierSettings.bool(forKey: "summarises") {
         didSet {
             UserDefaults.standard.set(summarises, forKey: "summarises")
             applyVoice()
@@ -154,12 +154,13 @@ public final class LiveSession {
 
     /// Device names (or part of them); nil for the system's. On the iPhone the
     /// microphone is a PhoneAudio.Input. Remembered.
-    public var microphone: String? = UserDefaults.standard.string(forKey: "microphone") {
+    public var microphone: String? = EarlierSettings.string(forKey: "microphone") {
         didSet { UserDefaults.standard.set(microphone, forKey: "microphone") }
     }
-    public var speaker: String? = UserDefaults.standard.string(forKey: "speaker") {
+    public var speaker: String? = EarlierSettings.string(forKey: "speaker") {
         didSet { UserDefaults.standard.set(speaker, forKey: "speaker") }
     }
+
     /// The microphone the last session actually used, and in what mode.
     public private(set) var inputDescription: String?
 
@@ -183,7 +184,11 @@ public final class LiveSession {
     public var isBusy: Bool { preparationID != nil || starting || shutdownTask != nil }
     private var audioObservers: [NSObjectProtocol] = []
 
-    public init() {}
+    /// Reads the previous bundle's defaults before any view does, and copies a
+    /// missing key into this bundle's domain. The old file is left where it is.
+    public init() {
+        EarlierSettings.adopt()
+    }
 
     public var isLive: Bool { phase == .live }
 
@@ -567,4 +572,50 @@ extension LiveSession.Phase {
 struct Problem: LocalizedError {
     let errorDescription: String?
     init(_ message: String) { errorDescription = message }
+}
+
+/// Settings follow the running app's bundle id. This build's id is
+/// `com.snepssen.interpreter`; the previous one was
+/// `local.translate-core.interpreter`. A key missing from the new domain is
+/// read from the old one until the new domain has taken a copy. The old
+/// domain is never written, and nothing on disk is moved or deleted.
+private enum EarlierSettings {
+    private static let previousBundleID = "local.translate-core.interpreter"
+    private static let adoptedKey = "adoptedBundleIdentifier"
+    /// Also the keys `@AppStorage` reads, so the views see them after `adopt()`.
+    private static let keys = [
+        "languages", "target", "untrainedLanguages", "translationModel", "recognitionModel",
+        "voiceVolume", "captionsOnly", "summarises", "microphone", "speaker",
+        "showEnglish", "textScale",
+    ]
+    /// A fresh defaults object each call. A stored static would share a
+    /// non-Sendable `UserDefaults` across executors.
+    private static func previous() -> UserDefaults? { UserDefaults(suiteName: previousBundleID) }
+
+    private static var adopted: Bool { UserDefaults.standard.object(forKey: adoptedKey) != nil }
+
+    static func object(forKey key: String) -> Any? {
+        if let value = UserDefaults.standard.object(forKey: key) { return value }
+        guard !adopted else { return nil }
+        return previous()?.object(forKey: key)
+    }
+
+    static func string(forKey key: String) -> String? { object(forKey: key) as? String }
+
+    static func stringArray(forKey key: String) -> [String]? { object(forKey: key) as? [String] }
+
+    static func bool(forKey key: String) -> Bool { object(forKey: key) as? Bool ?? false }
+
+    /// Copies each remembered key the new domain does not have yet. A later
+    /// removal in the new domain stays removed. Skipped when the old domain
+    /// has none of these keys, so a fresh install writes nothing.
+    static func adopt() {
+        guard !adopted, keys.contains(where: { previous()?.object(forKey: $0) != nil }) else { return }
+        let defaults = UserDefaults.standard
+        for key in keys {
+            guard defaults.object(forKey: key) == nil, let value = previous()?.object(forKey: key) else { continue }
+            defaults.set(value, forKey: key)
+        }
+        defaults.set("com.snepssen.interpreter", forKey: adoptedKey)
+    }
 }
