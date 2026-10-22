@@ -1,4 +1,4 @@
-# translate-core
+# interpreter-forge
 
 Live speech interpretation that works like a human interpreter rather than a
 walkie-talkie. It listens continuously, waits until a thought is complete, and

@@ -211,7 +211,7 @@ public final class LiveSession {
         do {
             try Task.checkCancellation()
             guard let voiceURL = Resources.voice, let espeak = Resources.espeakData else {
-                throw Problem("No voice. Build with build.sh, or keep voice-polyglot and voice-forge beside translate-core.")
+                throw Problem("No voice. Build with build.sh, or keep voice-polyglot and voice-forge beside interpreter-forge.")
             }
             if recognizer == nil {
                 phase = .loading("Loading speech recognition…")

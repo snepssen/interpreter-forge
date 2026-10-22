@@ -8,7 +8,7 @@ import VoiceCore
 final class VoiceTests: XCTestCase {
     private func polyglot() throws -> Voice {
         guard let model = Resources.polyglotVoice, let data = Resources.espeakData else {
-            throw XCTSkip("No polyglot voice (voice-polyglot beside translate-core, or models/voice).")
+            throw XCTSkip("No polyglot voice (voice-polyglot beside interpreter-forge, or models/voice).")
         }
         return try Voice(model: model, espeakData: data)
     }

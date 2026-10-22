@@ -10,8 +10,8 @@
 <meta property="og:title" content="Interpreter — live interpreting on your own device">
 <meta property="og:description" content="Any of 25 languages around you, in English, Polish, Hungarian, German, Dutch, French, Spanish or Italian in your ear a few seconds later. Nothing leaves the device.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://snepssen.github.io/translate-core/">
-<meta property="og:image" content="https://snepssen.github.io/translate-core/preview.png">
+<meta property="og:url" content="https://snepssen.github.io/interpreter-forge/">
+<meta property="og:image" content="https://snepssen.github.io/interpreter-forge/preview.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The Interpreter page">
@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="ecosystem.css">
 </head>
-<body data-project="translate-core">
+<body data-project="interpreter-forge">
 
 <span class="ecosystem-page-top" id="page-top" aria-hidden="true"></span>
 <div class="ecosystem-progress" aria-hidden="true"><span></span></div>
@@ -109,8 +109,8 @@
       <a data-project="media-preflight" style="--project-accent: var(--eco-preflight)" href="https://snepssen.github.io/media-preflight/">Media Preflight</a>
       <a data-project="siphon" style="--project-accent: var(--eco-siphon)" href="https://snepssen.github.io/siphon/">siphon</a>
       <a data-project="auto-sort" style="--project-accent: var(--eco-autosort)" href="https://snepssen.github.io/auto-sort/">auto-sort</a>
-      <a data-project="translate-core" style="--project-accent: var(--eco-interpreter)" href="https://snepssen.github.io/translate-core/">Interpreter</a>
-      <a data-project="companion-core" style="--project-accent: var(--eco-companion)" href="https://snepssen.github.io/companion-core/">companion-core</a>
+      <a data-project="interpreter-forge" style="--project-accent: var(--eco-interpreter)" href="https://snepssen.github.io/interpreter-forge/">Interpreter</a>
+      <a data-project="companion-forge" style="--project-accent: var(--eco-companion)" href="https://snepssen.github.io/companion-forge/">companion-forge</a>
       <a data-project="tools-core" style="--project-accent: var(--eco-tools)" href="https://snepssen.github.io/tools-core/">tools-core</a>
       <a data-project="voice-polyglot" style="--project-accent: var(--eco-polyglot)" href="https://github.com/snepssen/voice-polyglot">voice-polyglot</a>
       <a data-project="voice-core" style="--project-accent: var(--eco-voicecore)" href="https://github.com/snepssen/voice-core">voice-core</a>
@@ -315,8 +315,8 @@
   <p>There is no App Store build. The apps need an Apple silicon Mac with macOS 14, or an iPhone with 8 GB of memory, and Xcode to build them. espeak-ng's data comes from <a href="https://github.com/snepssen/voice-forge">voice-forge</a>, cloned beside this repository, and the voice from <a href="https://github.com/snepssen/voice-polyglot">voice-polyglot</a>. Everything to build them is here: the app's source and build scripts, and in voice-polyglot the whole pipeline the voice was made with, from the scripts it read to training and export. The voice itself is fetched by the build from voice-polyglot's <a href="https://github.com/snepssen/voice-polyglot/releases">releases</a>, the newest one each time: <b>still in training</b>, marked with an asterisk and the epoch it was exported at.</p>
   <pre class="code"><span class="c"># beside each other</span>
 git clone https://github.com/snepssen/voice-forge
-git clone https://github.com/snepssen/translate-core
-cd translate-core
+git clone https://github.com/snepssen/interpreter-forge
+cd interpreter-forge
 
 apple/build.sh             <span class="c"># the Mac app: apple/Interpreter.app</span>
 apple/iOS/build-ios.sh     <span class="c"># the iPhone app, onto a connected iPhone</span>
@@ -399,19 +399,19 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
       <p>Empty the Downloads funnel into structure the folder taught it, and undo any of it.</p>
       <span class="ecosystem-card__go">Explore auto-sort →</span>
     </a>
-    <a class="ecosystem-card" data-project="translate-core" style="--card-accent: var(--eco-interpreter)" href="https://snepssen.github.io/translate-core/" aria-current="page">
+    <a class="ecosystem-card" data-project="interpreter-forge" style="--card-accent: var(--eco-interpreter)" href="https://snepssen.github.io/interpreter-forge/" aria-current="page">
       <div class="ecosystem-card__index"><span>07 / INTERPRETING</span><span>macOS · iPhone</span></div>
       <div class="ecosystem-card__glyph" aria-hidden="true">halb elf → 10:30</div>
       <h3>Interpreter</h3>
       <p>Hear the table in English a few seconds behind, cut at the end of each thought, on your own phone.</p>
       <span class="ecosystem-card__go">Explore Interpreter →</span>
     </a>
-    <a class="ecosystem-card" data-project="companion-core" style="--card-accent: var(--eco-companion)" href="https://snepssen.github.io/companion-core/">
+    <a class="ecosystem-card" data-project="companion-forge" style="--card-accent: var(--eco-companion)" href="https://snepssen.github.io/companion-forge/">
       <div class="ecosystem-card__index"><span>08 / COMPANION</span><span>Mac · iPhone · iPad</span></div>
       <div class="ecosystem-card__glyph" aria-hidden="true">mic → visor</div>
-      <h3>companion-core</h3>
+      <h3>companion-forge</h3>
       <p>A local voice companion for Mac, iPhone and iPad, with a protogen LED-visor face.</p>
-      <span class="ecosystem-card__go">Explore companion-core →</span>
+      <span class="ecosystem-card__go">Explore companion-forge →</span>
     </a>
     <a class="ecosystem-card" data-project="tools-core" style="--card-accent: var(--eco-tools)" href="https://snepssen.github.io/tools-core/">
       <div class="ecosystem-card__index"><span>09 / FIELD TOOLS</span><span>Python · shell</span></div>
@@ -449,14 +449,14 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
   <h2>If something looks wrong, say so</h2>
   <p>There is no analytics here and no crash reporter, so a failure has no way of reaching me on its own.</p>
   <div class="contact-card">
-    <a href="https://github.com/snepssen/translate-core/issues">Open an issue<span>github.com/snepssen/translate-core ↗</span></a>
+    <a href="https://github.com/snepssen/interpreter-forge/issues">Open an issue<span>github.com/snepssen/interpreter-forge ↗</span></a>
     <a href="https://t.me/snepssen">Telegram<span>@snepssen ↗</span></a>
     <a href="mailto:snepssen@proton.me">Email<span>snepssen@proton.me ↗</span></a>
   </div>
 </section>
 
 <footer>
-  <a href="https://github.com/snepssen/translate-core">github.com/snepssen/translate-core</a> · part of the <a href="https://snepssen.github.io/tools-core/">snepssen workshop</a>
+  <a href="https://github.com/snepssen/interpreter-forge">github.com/snepssen/interpreter-forge</a> · part of the <a href="https://snepssen.github.io/tools-core/">snepssen workshop</a>
 </footer>
 
 </div>

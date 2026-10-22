@@ -101,7 +101,7 @@ MODELS = """  <table>
 
 PAGE = {
     "meta": {
-        "slug": "translate-core",
+        "slug": "interpreter-forge",
         "name": "Interpreter",
         "title": "Interpreter — live interpreting on your own device",
         "badge": "macOS · iPhone · on-device",
@@ -382,8 +382,8 @@ PAGE = {
                 ]},
                 {"kind": "raw", "html": """  <pre class="code"><span class="c"># beside each other</span>
 git clone https://github.com/snepssen/voice-forge
-git clone https://github.com/snepssen/translate-core
-cd translate-core
+git clone https://github.com/snepssen/interpreter-forge
+cd interpreter-forge
 
 apple/build.sh             <span class="c"># the Mac app: apple/Interpreter.app</span>
 apple/iOS/build-ios.sh     <span class="c"># the iPhone app, onto a connected iPhone</span>
@@ -482,7 +482,7 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
         "are the most useful thing you can send."),
 
     "footer": [
-        '<a href="https://github.com/snepssen/translate-core">github.com/snepssen/translate-core</a> '
+        '<a href="https://github.com/snepssen/interpreter-forge">github.com/snepssen/interpreter-forge</a> '
         '· part of the <a href="https://snepssen.github.io/tools-core/">snepssen workshop</a>',
     ],
 }

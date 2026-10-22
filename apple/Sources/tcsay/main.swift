@@ -23,7 +23,7 @@ guard let out = option("--out"), let text = args.first else {
     exit(2)
 }
 guard let model = Resources.polyglotVoice, let espeak = Resources.espeakData else {
-    print("missing: the polyglot voice (voice-polyglot beside translate-core) or espeak-ng data")
+    print("missing: the polyglot voice (voice-polyglot beside interpreter-forge) or espeak-ng data")
     exit(1)
 }
 let voice = try Voice(model: model, espeakData: espeak)
