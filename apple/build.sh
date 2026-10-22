@@ -64,7 +64,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleExecutable</key><string>Interpreter</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
-  <key>CFBundleIdentifier</key><string>local.translate-core.interpreter</string>
+  <key>CFBundleIdentifier</key><string>com.snepssen.interpreter</string>
   <key>CFBundleName</key><string>Interpreter</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1</string>

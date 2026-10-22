@@ -1,5 +1,5 @@
 [project]
-name = "translate-core"
+name = "interpreter-forge"
 version = "0.1.0"
 description = "Live speech interpretation into English, locally: Parakeet ASR, a small LLM, Piper voices."
 readme = "README.md"
