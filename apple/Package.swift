@@ -16,10 +16,11 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.32.3"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.5"),
         .package(url: "https://github.com/huggingface/swift-huggingface", from: "1.0.0"),
-        .package(url: "https://github.com/microsoft/onnxruntime-swift-package-manager", from: "1.20.0"),
-        // NSException to NSError, for AVAudioEngine, which raises instead of throwing.
-        // The two files lived in Sources/ObjCExceptions; speech-core 0.1.0 is that copy.
-        .package(url: "https://github.com/snepssen/speech-core", from: "0.1.0"),
+        // Hearing shared with companion-forge. ObjCExceptions (0.1.0) turns
+        // AVAudioEngine's NSException into an NSError. SileroVAD (0.2.0) is the
+        // v5 detector; the weights stay in the app as silero_vad.onnx. ONNX
+        // Runtime comes with this package and with voice-core.
+        .package(url: "https://github.com/snepssen/speech-core", from: "0.2.0"),
         // The speech engine Voice Forge and Gateway Forge share: espeak-ng and
         // its data, the phonemizer, Polyphon and Piper inference. Bumped by
         // voice-core's release script, which runs these checks first.
@@ -28,6 +29,7 @@ let package = Package(
     targets: [
         .testTarget(name: "InterpreterEngineTests", dependencies: [
             "InterpreterEngine", "InterpreterCore",
+            .product(name: "SileroVAD", package: "speech-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
         ]),
@@ -37,11 +39,13 @@ let package = Package(
         .target(name: "InterpreterCore"),
         // Never links a model; `swift run tccheck` stays fast and runs anywhere.
         .executableTarget(name: "tccheck", dependencies: ["InterpreterCore"]),
-        // The models and the live loop: Parakeet and VAD (FluidAudio, ONNX),
-        // the translation model (MLX), the voice (voice-core's Piper on ONNX).
+        // The models and the live loop: Parakeet (FluidAudio), Silero VAD
+        // (speech-core), the translation model (MLX), the voice (voice-core's
+        // Piper on ONNX).
         .target(name: "InterpreterEngine", dependencies: [
             "InterpreterCore",
             .product(name: "ObjCExceptions", package: "speech-core"),
+            .product(name: "SileroVAD", package: "speech-core"),
             .product(name: "VoiceCore", package: "voice-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "FluidAudio", package: "FluidAudio"),
@@ -50,7 +54,6 @@ let package = Package(
             .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
             .product(name: "HuggingFace", package: "swift-huggingface"),
             .product(name: "Tokenizers", package: "swift-transformers"),
-            .product(name: "onnxruntime", package: "onnxruntime-swift-package-manager"),
         ]),
         // The views, shared by the Mac app and the iPhone app.
         .target(name: "InterpreterUI", dependencies: ["InterpreterCore", "InterpreterEngine"]),
