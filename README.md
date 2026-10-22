@@ -105,14 +105,13 @@ modification dates, and the user confirmed Ready without another download.
 
 ## Shared translation models
 
-A Release build reads translation models only from the shared folder, and
-does not download, move, or delete them. Each model is a directory named
-with its id:
+A Mac Release build reads translation models only from the shared folder,
+and does not download, move, or delete them. Each model is a directory
+named with its id:
 
     ~/Library/Application Support/snepssen/models/<model id>/<file>
 
-On iOS the same layout is the `models` directory inside the
-`group.com.snepssen.models` app-group container. Debug builds still look in
+Mac Debug builds, and the iPhone app in every configuration, still look in
 `~/Library/Application Support/Interpreter/Models` and in this checkout's
 `models/`.
 

@@ -6,10 +6,5 @@
        limit on an 8 GB iPhone. -->
   <key>com.apple.developer.kernel.increased-memory-limit</key>
   <true/>
-  <!-- Release builds read translation models from this group. Debug does not. -->
-  <key>com.apple.security.application-groups</key>
-  <array>
-    <string>group.com.snepssen.models</string>
-  </array>
 </dict>
 </plist>

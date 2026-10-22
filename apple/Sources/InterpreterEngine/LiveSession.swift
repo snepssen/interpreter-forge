@@ -203,13 +203,7 @@ public final class LiveSession {
             return
         }
         let modelURL: URL
-        #if DEBUG
-        guard let found = Resources.models.location(of: model) else {
-            phase = .choosingModel
-            return
-        }
-        modelURL = found
-        #else
+        #if os(macOS) && !DEBUG
         if let failure = Resources.modelsUnavailable {
             phase = .choosingModel
             notice = failure
@@ -220,6 +214,12 @@ public final class LiveSession {
             notice = error.localizedDescription
             return
         }
+        #else
+        guard let found = Resources.models.location(of: model) else {
+            phase = .choosingModel
+            return
+        }
+        modelURL = found
         #endif
         let preparation = UUID()
         preparationID = preparation
@@ -392,7 +392,7 @@ public final class LiveSession {
             storeChanges += 1
         }
         do {
-            #if !DEBUG
+            #if os(macOS) && !DEBUG
             if let failure = Resources.modelsUnavailable { throw Problem(failure) }
             #endif
             try await Resources.models.download(model) { fraction in
@@ -402,12 +402,12 @@ public final class LiveSession {
             }
             if translationModel == nil || Resources.models.location(of: translationModel!) == nil { await use(model) }
         } catch {
-            #if DEBUG
-            notice = "Couldn't download \(model.name): \(error.localizedDescription)"
-            #else
-            // A Release store refuses to fetch. The error names the file that
-            // should already be in the shared folder.
+            #if os(macOS) && !DEBUG
+            // A Mac Release store refuses to fetch. The error names the file
+            // that should already be in the shared folder.
             notice = error.localizedDescription
+            #else
+            notice = "Couldn't download \(model.name): \(error.localizedDescription)"
             #endif
         }
     }
