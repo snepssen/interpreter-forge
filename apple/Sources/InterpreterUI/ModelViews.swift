@@ -1,4 +1,5 @@
 import InterpreterEngine
+import ModelStore
 import SwiftUI
 
 /// First launch, or after deleting the model in use: one recommended
@@ -6,7 +7,7 @@ import SwiftUI
 struct ModelPicker: View {
     let session: LiveSession
     @State private var showOthers = ModelCatalog.offered.contains {
-        $0 != ModelCatalog.recommended && ModelStore.isDownloaded($0)
+        $0 != ModelCatalog.recommended && Resources.models.isDownloaded($0)
     }
 
     var body: some View {
@@ -63,7 +64,7 @@ private struct PickerAction: View {
                 Text("Downloading · \(Int(fraction * 100))% · keep the app open")
                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             }
-        } else if ModelStore.isDownloaded(model) {
+        } else if Resources.models.isDownloaded(model) {
             Button { Task { await session.use(model) } } label: {
                 Label("Use \(model.name)", systemImage: "checkmark.circle").frame(minHeight: 28)
             }

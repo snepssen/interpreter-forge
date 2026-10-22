@@ -1,4 +1,5 @@
 import Foundation
+import ModelStore
 import VoiceCore
 
 /// Where the models and data live: in the app bundle when built by build.sh,
@@ -9,6 +10,14 @@ public enum Resources {
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
     static let voiceForge = checkout.deletingLastPathComponent().appending(path: "voice-forge")
     static let voicePolyglot = checkout.deletingLastPathComponent().appending(path: "voice-polyglot")
+
+    /// Application Support/Interpreter/Models, then this checkout's models/.
+    /// A copy found in the checkout is used as it is and never deleted.
+    public static let models = ModelStore(
+        directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appending(path: "Interpreter/Models"),
+        alsoSearching: [checkout.appending(path: "models")],
+        leaveLinks: false)
     static let voiceName = "en_US-snepssen-medium.onnx"
     static let polyglotName = "snepssen-polyglot.onnx"
 

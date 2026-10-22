@@ -19,9 +19,10 @@ let package = Package(
         // Hearing shared with companion-forge. ObjCExceptions (0.1.0) turns
         // AVAudioEngine's NSException into an NSError. SileroVAD (0.2.0) is the
         // v5 detector; the weights stay in the app as silero_vad.onnx.
-        // SampleBuffer (0.3.0) is the 16 kHz window. ONNX Runtime comes with
-        // this package and with voice-core.
-        .package(url: "https://github.com/snepssen/speech-core", from: "0.3.0"),
+        // SampleBuffer (0.3.0) is the 16 kHz window. ModelStore (0.4.0) finds
+        // and fetches a pinned model; the catalogue stays here. ONNX Runtime
+        // comes with this package and with voice-core.
+        .package(url: "https://github.com/snepssen/speech-core", from: "0.4.0"),
         // The speech engine Voice Forge and Gateway Forge share: espeak-ng and
         // its data, the phonemizer, Polyphon and Piper inference. Bumped by
         // voice-core's release script, which runs these checks first.
@@ -30,6 +31,7 @@ let package = Package(
     targets: [
         .testTarget(name: "InterpreterEngineTests", dependencies: [
             "InterpreterEngine", "InterpreterCore",
+            .product(name: "ModelStore", package: "speech-core"),
             .product(name: "SampleBuffer", package: "speech-core"),
             .product(name: "SileroVAD", package: "speech-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
@@ -47,6 +49,7 @@ let package = Package(
         .target(name: "InterpreterEngine", dependencies: [
             "InterpreterCore",
             .product(name: "ObjCExceptions", package: "speech-core"),
+            .product(name: "ModelStore", package: "speech-core"),
             .product(name: "SampleBuffer", package: "speech-core"),
             .product(name: "SileroVAD", package: "speech-core"),
             .product(name: "VoiceCore", package: "voice-core"),
@@ -59,7 +62,10 @@ let package = Package(
             .product(name: "Tokenizers", package: "swift-transformers"),
         ]),
         // The views, shared by the Mac app and the iPhone app.
-        .target(name: "InterpreterUI", dependencies: ["InterpreterCore", "InterpreterEngine"]),
+        .target(name: "InterpreterUI", dependencies: [
+            "InterpreterCore", "InterpreterEngine",
+            .product(name: "ModelStore", package: "speech-core"),
+        ]),
         .executableTarget(name: "Interpreter", dependencies: ["InterpreterEngine", "InterpreterUI"]),
         // Test speech in the app's own voice, for tcrun to interpret.
         .executableTarget(name: "tcsay", dependencies: ["InterpreterEngine"]),
@@ -67,7 +73,9 @@ let package = Package(
         .executableTarget(name: "tcasr", dependencies: ["InterpreterEngine"]),
         // A recording through the live pipeline in real time, for measuring.
         .executableTarget(name: "tcrun", dependencies: [
-            "InterpreterCore", "InterpreterEngine", .product(name: "FluidAudio", package: "FluidAudio"),
+            "InterpreterCore", "InterpreterEngine",
+            .product(name: "ModelStore", package: "speech-core"),
+            .product(name: "FluidAudio", package: "FluidAudio"),
         ]),
     ]
 )
