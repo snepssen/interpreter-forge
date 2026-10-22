@@ -161,12 +161,6 @@ public final class LiveSession {
         didSet { UserDefaults.standard.set(speaker, forKey: "speaker") }
     }
 
-    /// Reads the previous bundle's defaults before any view does, and copies a
-    /// missing key into this bundle's domain. The old file is left where it is.
-    public init() {
-        EarlierSettings.adopt()
-    }
-
     /// The microphone the last session actually used, and in what mode.
     public private(set) var inputDescription: String?
 
@@ -190,7 +184,11 @@ public final class LiveSession {
     public var isBusy: Bool { preparationID != nil || starting || shutdownTask != nil }
     private var audioObservers: [NSObjectProtocol] = []
 
-    public init() {}
+    /// Reads the previous bundle's defaults before any view does, and copies a
+    /// missing key into this bundle's domain. The old file is left where it is.
+    public init() {
+        EarlierSettings.adopt()
+    }
 
     public var isLive: Bool { phase == .live }
 
@@ -590,14 +588,16 @@ private enum EarlierSettings {
         "voiceVolume", "captionsOnly", "summarises", "microphone", "speaker",
         "showEnglish", "textScale",
     ]
-    private static let previous = UserDefaults(suiteName: previousBundleID)
+    /// A fresh defaults object each call. A stored static would share a
+    /// non-Sendable `UserDefaults` across executors.
+    private static func previous() -> UserDefaults? { UserDefaults(suiteName: previousBundleID) }
 
     private static var adopted: Bool { UserDefaults.standard.object(forKey: adoptedKey) != nil }
 
     static func object(forKey key: String) -> Any? {
         if let value = UserDefaults.standard.object(forKey: key) { return value }
         guard !adopted else { return nil }
-        return previous?.object(forKey: key)
+        return previous()?.object(forKey: key)
     }
 
     static func string(forKey key: String) -> String? { object(forKey: key) as? String }
@@ -610,10 +610,10 @@ private enum EarlierSettings {
     /// removal in the new domain stays removed. Skipped when the old domain
     /// has none of these keys, so a fresh install writes nothing.
     static func adopt() {
-        guard !adopted, keys.contains(where: { previous?.object(forKey: $0) != nil }) else { return }
+        guard !adopted, keys.contains(where: { previous()?.object(forKey: $0) != nil }) else { return }
         let defaults = UserDefaults.standard
         for key in keys {
-            guard defaults.object(forKey: key) == nil, let value = previous?.object(forKey: key) else { continue }
+            guard defaults.object(forKey: key) == nil, let value = previous()?.object(forKey: key) else { continue }
             defaults.set(value, forKey: key)
         }
         defaults.set("com.snepssen.interpreter", forKey: adoptedKey)
