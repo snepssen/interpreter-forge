@@ -3,6 +3,7 @@ package com.snepssen.voice
 import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
+import com.snepssen.ort.Ort
 import org.json.JSONObject
 import java.io.File
 import java.nio.FloatBuffer

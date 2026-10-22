@@ -52,6 +52,7 @@ val polyglotVoice by tasks.registering(Copy::class) {
 tasks.named("preBuild") { dependsOn(voiceCoreAssets, voiceCoreFixtures, polyglotVoice) }
 
 dependencies {
+    implementation(project(":ort"))
     implementation(libs.onnxruntime.android)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
