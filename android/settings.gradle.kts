@@ -11,4 +11,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "Interpreter"
-include(":app", ":core", ":voice", ":hearing", ":translating", ":engine")
+include(":app", ":core", ":ort", ":voice", ":hearing", ":translating", ":engine")

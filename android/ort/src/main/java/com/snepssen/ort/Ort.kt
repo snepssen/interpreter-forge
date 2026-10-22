@@ -1,4 +1,4 @@
-package com.snepssen.hearing
+package com.snepssen.ort
 
 import ai.onnxruntime.OrtEnvironment
 
