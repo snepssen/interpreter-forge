@@ -18,6 +18,12 @@ def test_ios_never_installs_a_stale_product(tmp_path, mode, expected_calls, succ
     ios.mkdir(parents=True)
     script = ios / "build-ios.sh"
     script.write_bytes((Path(__file__).parents[1] / "apple/iOS/build-ios.sh").read_bytes())
+    # The script asks for the voice before it calls xcodebuild. This tree is
+    # not the repo, so give it a stub that prints a path and nothing else.
+    voice = ios.parent / "scripts" / "polyglot-voice.sh"
+    voice.parent.mkdir()
+    voice.write_text("#!/bin/sh\nprintf '%s\\n' /tmp/snepssen-polyglot.onnx\n")
+    voice.chmod(0o755)
     app = ios / ".build/Build/Products/Release-iphoneos/Interpreter.app"
     app.mkdir(parents=True)
     (app / "Interpreter").write_text("stale app")
@@ -42,8 +48,9 @@ esac
 case "$*" in
   *"clean build")
     if [ "$BUILD_MODE" = clean_recovers ]; then
-      mkdir -p "$TEST_APP"
+      mkdir -p "$TEST_APP/VoiceCore_VoiceCore.bundle/espeak-ng-data"
       echo fresh > "$TEST_APP/Interpreter"
+      echo data > "$TEST_APP/VoiceCore_VoiceCore.bundle/espeak-ng-data/phontab"
       cat > "$TEST_APP/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
