@@ -1,11 +1,16 @@
+import pytest
+
+from cases import load
 from translate_core.translate import echoes
 
-
-def test_garbled_english_repeated_is_an_echo():
-    assert echoes("I put on the table go see the bag then.", "I put on the table go see the bag then.")
-    assert echoes("She comes in hug me. Where is my cat?", "She comes in, hugs me. Where's my cat?")
+CASES = load("echoes")
 
 
-def test_a_real_translation_is_not():
-    assert not echoes("Nie, nie moja, twoja pewnie.", "No, it's not mine, probably yours.")
-    assert not echoes("Dziękuję. Gdzie później się oddać?", "Thank you. Where to meet up later?")
+@pytest.mark.parametrize("source, translation", CASES["echoes"])
+def test_garbled_english_repeated_is_an_echo(source, translation):
+    assert echoes(source, translation)
+
+
+@pytest.mark.parametrize("source, translation", CASES["notEchoes"])
+def test_a_real_translation_is_not(source, translation):
+    assert not echoes(source, translation)
