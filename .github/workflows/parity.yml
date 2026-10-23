@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   python:
-    runs-on: ubuntu-latest
+    # macOS: translate_core imports mlx-lm, which has no Linux build.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

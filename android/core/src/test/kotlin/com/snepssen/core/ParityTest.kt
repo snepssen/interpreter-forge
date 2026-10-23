@@ -20,7 +20,7 @@ import java.io.File
 import kotlin.math.abs
 
 /**
- * The Kotlin core held to the cases in cases/*.json, which the iPhone app's
+ * The Kotlin core held to the cases in the cases folder (one JSON file per part), which the iPhone app's
  * tccheck and the Python tests read too: same inputs, same answers.
  */
 class ParityTest {
