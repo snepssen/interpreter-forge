@@ -1,0 +1,23 @@
+{
+ "about": "echoes(source, translation): a translation that only repeats its source is an echo.",
+ "echoes": [
+  [
+   "I put on the table go see the bag then.",
+   "I put on the table go see the bag then."
+  ],
+  [
+   "She comes in hug me. Where is my cat?",
+   "She comes in, hugs me. Where's my cat?"
+  ]
+ ],
+ "notEchoes": [
+  [
+   "Nie, nie moja, twoja pewnie.",
+   "No, it's not mine, probably yours."
+  ],
+  [
+   "Dziękuję. Gdzie później się oddać?",
+   "Thank you. Where to meet up later?"
+  ]
+ ]
+}

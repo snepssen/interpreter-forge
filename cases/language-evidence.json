@@ -1,0 +1,110 @@
+{
+ "about": "Languages.evidence(text, expected): true when the text shows signs of an expected language, false when of another, null when neither.",
+ "cases": [
+  {
+   "text": "A tudom, de a nyelvedől.",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": true,
+   "why": "ő: Hungarian, however garbled the rest"
+  },
+  {
+   "text": "Nem tudom, volám használt that volami.",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": true,
+   "why": "\"nem\", \"tudom\""
+  },
+  {
+   "text": "Chciałem poprosić o zapalniczkę.",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": true,
+   "why": "ł, ę"
+  },
+  {
+   "text": "Ale tego nie wiesz.",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": true,
+   "why": "\"nie\", \"tego\", \"wiesz\": no Polish letters at all"
+  },
+  {
+   "text": "Dat is gezellig, toch?",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": true
+  },
+  {
+   "text": "Почему единицы на подниму?",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": false,
+   "why": "Polish written down as Russian"
+  },
+  {
+   "text": "Não é nada pois.",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": false,
+   "why": "ã, and nothing of ours"
+  },
+  {
+   "text": "¿Dónde está el baño?",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": false
+  },
+  {
+   "text": "Почему единицы на подниму?",
+   "expected": [
+    "en",
+    "ru"
+   ],
+   "evidence": "notFalse",
+   "why": "Cyrillic is fine where Russian is expected"
+  },
+  {
+   "text": "Apoi zulas.",
+   "expected": [
+    "en",
+    "pl",
+    "hu",
+    "nl"
+   ],
+   "evidence": null
+  }
+ ]
+}

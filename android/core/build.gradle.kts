@@ -14,4 +14,6 @@ dependencies {
     implementation(libs.coroutines.core)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.core)
+    // Only its JSON tree, to read ../../cases; no compiler plugin needed.
+    testImplementation(libs.serialization.json)
 }

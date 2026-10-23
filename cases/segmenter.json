@@ -1,0 +1,802 @@
+{
+ "about": "The segmenter's cases, read by tests/test_segmenter.py, apple/Sources/tccheck and android/core's ParityTest: same inputs, same answers in every language. See cases/README.md for the format.",
+ "cases": [
+  {
+   "name": "a full stop at the window's end is not trusted",
+   "steps": [
+    {
+     "now": 2.0,
+     "words": [
+      {
+       "text": "Ich wollte nur sagen."
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    },
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "Ich wollte nur sagen."
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "a sentence end with stable speech after it commits",
+   "why": "Seen once, a sentence end is not yet stable; seen twice, it commits.",
+   "steps": [
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "Ich wollte nur sagen. Dass wir"
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Ich wollte nur sagen. Dass wir"
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "Ich wollte nur sagen.",
+       "reason": "sentence"
+      }
+     ]
+    }
+   ],
+   "after": {
+    "mark": 1.5,
+    "pending": [
+     "Dass",
+     "wir"
+    ]
+   }
+  },
+  {
+   "name": "a full stop that moves is not stable",
+   "steps": [
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "Ich wollte nur sagen. Dass wir"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Ich wollte nur sagen, dass wir morgen"
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "a hesitation after a final full stop does not confirm it",
+   "why": "\"dass wir.\" at a mid-clause pause: the verb has not arrived yet.",
+   "steps": [
+    {
+     "now": 2.0,
+     "words": [
+      {
+       "text": "Ich wollte sagen, dass wir."
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Ich wollte sagen, dass wir."
+      }
+     ],
+     "silence": 1.1,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "case and comma flicker still counts as stable",
+   "steps": [
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "ich wollte nur sagen. Dass wir"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Ich wollte nur, sagen. dass wir"
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "Ich wollte nur, sagen."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a mid-sentence hesitation waits",
+   "why": "The words end at 1.5 s; a one-second silence is a hesitation, shorter than longPause.",
+   "steps": [
+    {
+     "now": 2.0,
+     "words": [
+      {
+       "text": "Also ich wollte eigentlich"
+      }
+     ],
+     "silence": 0.5
+    },
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "Also ich wollte eigentlich"
+      }
+     ],
+     "silence": 1.0,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "a long pause commits everything",
+   "steps": [
+    {
+     "now": 4.0,
+     "words": [
+      {
+       "text": "Also ich wollte eigentlich"
+      }
+     ],
+     "silence": 1.5,
+     "expect": [
+      {
+       "text": "Also ich wollte eigentlich",
+       "reason": "pause"
+      }
+     ]
+    }
+   ],
+   "after": {
+    "pending": []
+   }
+  },
+  {
+   "name": "a short sentence waits to join the next",
+   "config": {
+    "minWords": 3
+   },
+   "steps": [
+    {
+     "now": 1.5,
+     "words": [
+      {
+       "text": "Ja. Das ist"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 2.0,
+     "words": [
+      {
+       "text": "Ja. Das ist"
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    },
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "Ja. Das ist gut. Und dann"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Ja. Das ist gut. Und dann"
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "Ja. Das ist gut."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "an earlier sentence end commits when the latest is unconfirmed",
+   "steps": [
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Das ist ein Satz. Und noch einer."
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.5,
+     "words": [
+      {
+       "text": "Das ist ein Satz. Und noch einer."
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "Das ist ein Satz."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "run-on speech is cut at the last comma",
+   "config": {
+    "softSegment": 4.0
+   },
+   "steps": [
+    {
+     "now": 5.0,
+     "words": [
+      {
+       "text": "wir haben das gemacht, weil es nötig war, und dann haben wir noch"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 5.5,
+     "words": [
+      {
+       "text": "wir haben das gemacht, weil es nötig war, und dann haben wir noch"
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "wir haben das gemacht, weil es nötig war,",
+       "reason": "clause"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a comma too early to leave a real piece is skipped",
+   "why": "The comma rule alone: maxSegment and hardSegment are out of reach.",
+   "config": {
+    "softSegment": 4.0,
+    "maxSegment": 10.0,
+    "hardSegment": 15.0
+   },
+   "steps": [
+    {
+     "now": 5.0,
+     "words": [
+      {
+       "text": "Ja, also wir haben das gemacht weil es nötig war und dann haben wir noch"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 5.5,
+     "words": [
+      {
+       "text": "Ja, also wir haben das gemacht weil es nötig war und dann haben wir noch"
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "run-on speech without commas is cut at the widest gap",
+   "config": {
+    "softSegment": 3.0,
+    "maxSegment": 4.0
+   },
+   "steps": [
+    {
+     "now": 6.0,
+     "words": [
+      {
+       "text": "eins zwei drei vier fünf sechs sieben"
+      },
+      {
+       "text": "acht neun zehn elf zwölf",
+       "start": 3.6
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 6.5,
+     "words": [
+      {
+       "text": "eins zwei drei vier fünf sechs sieben"
+      },
+      {
+       "text": "acht neun zehn elf zwölf",
+       "start": 3.6
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "eins zwei drei vier fünf sechs sieben",
+       "reason": "force"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "left-context words are dropped",
+   "startMark": 1.0,
+   "steps": [],
+   "newWords": {
+    "words": [
+     [
+      "alt.",
+      0.6,
+      0.95
+     ],
+     [
+      "neu",
+      1.1,
+      1.4
+     ]
+    ],
+    "expect": [
+     "neu"
+    ]
+   }
+  },
+  {
+   "name": "the next word survives timing drift, but a committed word does not repeat",
+   "why": "The two steps commit up to \"Satz.\", mark 1.5; the next window's times have drifted.",
+   "steps": [
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "Das ist ein Satz. Der nächste"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Das ist ein Satz. Der nächste"
+      }
+     ],
+     "silence": 0.0
+    }
+   ],
+   "newWords": {
+    "words": [
+     [
+      "Satz.",
+      1.25,
+      1.45
+     ],
+     [
+      "Der",
+      1.42,
+      1.6
+     ],
+     [
+      "nächste",
+      1.7,
+      2.0
+     ]
+    ],
+    "expect": [
+     "Der",
+     "nächste"
+    ]
+   }
+  },
+  {
+   "name": "a committed word reheard differently is not repeated",
+   "why": "\"mir\" committed, then the next window hears its tail as \"Mehr\". Word times are relative to the mark.",
+   "steps": [
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Meldet sich bitte bei mir"
+      }
+     ],
+     "silence": 2.0
+    }
+   ],
+   "newWords": {
+    "fromMark": true,
+    "words": [
+     [
+      "Mehr.",
+      -0.25,
+      0.05
+     ],
+     [
+      "Danke.",
+      1.5,
+      1.9
+     ]
+    ],
+    "expect": [
+     "Danke."
+    ]
+   }
+  },
+  {
+   "name": "the judge commits a complete thought at a short pause",
+   "judge": [
+    "anfangen"
+   ],
+   "steps": [
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "dass wir um zehn anfangen."
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "dass wir um zehn anfangen."
+      }
+     ],
+     "silence": 0.5,
+     "expect": [
+      {
+       "reason": "judged"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "the judge holds a clause still waiting for its verb",
+   "judge": [
+    "anfangen"
+   ],
+   "steps": [
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "dass wir morgen nicht um neun."
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "dass wir morgen nicht um neun."
+      }
+     ],
+     "silence": 0.5,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "the judge is not asked about unstable words, or twice about the same",
+   "why": "\"dass wir morgen nicht\" ends at 1.5 s.",
+   "judge": [],
+   "steps": [
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "dass wir morgen"
+      }
+     ],
+     "silence": 0.5,
+     "asked": []
+    },
+    {
+     "now": 2.0,
+     "words": [
+      {
+       "text": "dass wir morgen nicht"
+      }
+     ],
+     "silence": 0.5
+    },
+    {
+     "now": 2.0,
+     "words": [
+      {
+       "text": "dass wir morgen nicht"
+      }
+     ],
+     "silence": 0.5
+    },
+    {
+     "now": 2.1,
+     "words": [
+      {
+       "text": "dass wir morgen nicht"
+      }
+     ],
+     "silence": 0.6
+    }
+   ],
+   "after": {
+    "asked": [
+     "dass wir morgen nicht"
+    ]
+   }
+  },
+  {
+   "name": "the judge vetoes a comma cut that would strand the verb",
+   "config": {
+    "softSegment": 4.0
+   },
+   "judge": [
+    "gemacht"
+   ],
+   "steps": [
+    {
+     "now": 5.0,
+     "words": [
+      {
+       "text": "weil wir das morgen um neun, und nicht später gemacht haben wollten und so"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 5.5,
+     "words": [
+      {
+       "text": "weil wir das morgen um neun, und nicht später gemacht haben wollten und so"
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "a forced cut prefers the point the judge accepts",
+   "why": "The widest gap is after \"es\" (0.5 s); the judge only accepts the cut after \"gemacht\" (0.3 s).",
+   "config": {
+    "softSegment": 3.0,
+    "maxSegment": 4.0
+   },
+   "judge": [
+    "gemacht"
+   ],
+   "steps": [
+    {
+     "now": 6.0,
+     "words": [
+      {
+       "text": "wir haben das alles gestern gemacht"
+      },
+      {
+       "text": "weil es",
+       "start": 2.6
+      },
+      {
+       "text": "nötig war und dann noch",
+       "start": 3.8
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 6.5,
+     "words": [
+      {
+       "text": "wir haben das alles gestern gemacht"
+      },
+      {
+       "text": "weil es",
+       "start": 2.6
+      },
+      {
+       "text": "nötig war und dann noch",
+       "start": 3.8
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "wir haben das alles gestern gemacht",
+       "reason": "force"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a forced cut waits rather than cut where the judge refuses, up to the hard limit",
+   "why": "The first hypothesis is 5.5 s long, the second 6.3 s: past hardSegment, it is cut anyway.",
+   "config": {
+    "softSegment": 3.0,
+    "maxSegment": 4.0,
+    "hardSegment": 6.0
+   },
+   "judge": [],
+   "steps": [
+    {
+     "now": 6.0,
+     "words": [
+      {
+       "text": "wir haben das alles gestern gemacht weil es nötig war und dann noch so"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 6.5,
+     "words": [
+      {
+       "text": "wir haben das alles gestern gemacht weil es nötig war und dann noch so"
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    },
+    {
+     "now": 7.0,
+     "words": [
+      {
+       "text": "wir haben das alles gestern gemacht weil es nötig war und dann noch so und weiter"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 7.5,
+     "words": [
+      {
+       "text": "wir haben das alles gestern gemacht weil es nötig war und dann noch so und weiter"
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "reason": "force"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "an early flicker does not hold back a later sentence end",
+   "steps": [
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Yeah yeah okay so we went home and slept. And then"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.5,
+     "words": [
+      {
+       "text": "Yeah yeah yeah okay so we went home and slept. And then"
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "text": "Yeah yeah yeah okay so we went home and slept."
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a mostly rewritten window is not stable",
+   "steps": [
+    {
+     "now": 3.0,
+     "words": [
+      {
+       "text": "Ich habe gestern das Auto. Und dann"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 3.5,
+     "words": [
+      {
+       "text": "Mich hat gestern der Hund. Und dann"
+      }
+     ],
+     "silence": 0.0,
+     "expect": []
+    }
+   ]
+  },
+  {
+   "name": "a long gap after the last word is a pause, whatever the VAD hears",
+   "why": "The words end at 0.7 s; the VAD still \"hears speech\" (silence 0) at 2.5 s.",
+   "steps": [
+    {
+     "now": 1.0,
+     "words": [
+      {
+       "text": "Nem tudom"
+      }
+     ],
+     "silence": 0.0
+    },
+    {
+     "now": 2.5,
+     "words": [
+      {
+       "text": "Nem tudom"
+      }
+     ],
+     "silence": 0.0,
+     "expect": [
+      {
+       "reason": "pause"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

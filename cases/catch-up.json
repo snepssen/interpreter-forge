@@ -1,0 +1,27 @@
+{
+ "about": "Backlog: a brief translation past 1.5 s of backlog, faster speech past 1 s, never more than 1.3x.",
+ "brief": [
+  [
+   1.4,
+   false
+  ],
+  [
+   1.5,
+   true
+  ]
+ ],
+ "pace": [
+  [
+   1,
+   1.0
+  ],
+  [
+   2,
+   1.1
+  ],
+  [
+   10,
+   1.3
+  ]
+ ]
+}
