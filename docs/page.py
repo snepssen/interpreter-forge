@@ -104,7 +104,7 @@ PAGE = {
         "slug": "interpreter-forge",
         "name": "Interpreter",
         "title": "Interpreter — live interpreting on your own device",
-        "badge": "macOS · iPhone · on-device",
+        "license": "GPL-3.0",
         "fonts": FONTS,
         "description": (
             "Live interpretation that waits for a complete thought, like a "
@@ -166,6 +166,8 @@ PAGE = {
             "jump": "How it cuts",
             "eyebrow": "How it works",
             "heading": "Deciding when a thought is complete",
+            "fold": True,
+            "teaser": 'Speech is re-read every half second and cut at the end of a thought, so each piece is translated whole.',
             "blocks": [
                 {"kind": "report", "text": (
                     'mic ─▶ voice activity ─▶ segmenter ─▶ translate ─▶ voice ─▶ headphones\n'
@@ -240,6 +242,8 @@ PAGE = {
             "jump": "Real talk",
             "eyebrow": "Real conversation",
             "heading": "Tuned on seventy minutes of a real kitchen table",
+            "fold": True,
+            "teaser": 'The segmenter was tuned on seventy minutes of a real three-language conversation, and what that changed.',
             "blocks": [
                 {"kind": "prose", "text": [
                     "Samples read clearly are the easy case. The segmenter was "
@@ -261,6 +265,8 @@ PAGE = {
             "jump": "The voice",
             "eyebrow": "The voice",
             "heading": "One voice, eight languages, 64 MB",
+            "fold": True,
+            "teaser": 'One 64 MB Piper voice speaks all eight languages as the same character, in milliseconds on the device.',
             "blocks": [
                 {"kind": "prose", "class": "lede", "text": [
                     "The interpreter speaks with snepssen: one small Piper voice "
@@ -309,6 +315,8 @@ PAGE = {
             "jump": "Models",
             "eyebrow": "Models",
             "heading": "Choose the translator; it downloads once",
+            "fold": True,
+            "teaser": 'The translator is picked on first launch and downloaded once; how the models compare.',
             "blocks": [
                 {"kind": "prose", "text": [
                     "Models are picked in the app on first launch, and can be "
@@ -401,6 +409,8 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
             "jump": "Roadmap",
             "eyebrow": "Where it is going",
             "heading": "Roadmap",
+            "fold": True,
+            "teaser": 'What comes next, toward the same goal.',
             "blocks": [
                 {"kind": "prose", "class": "lede", "text": [
                     "The goal does not change: be included in a conversation "
@@ -453,6 +463,8 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
             "jump": "Limits",
             "eyebrow": "Honesty",
             "heading": "What it is not",
+            "fold": True,
+            "teaser": 'Not a certified interpreter: where it goes wrong, and where it should not be relied on.',
             "blocks": [
                 {"kind": "prose", "text": [
                     "<b>It is not a certified interpreter</b>, and should not be "
@@ -474,6 +486,7 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
                 ]},
             ],
         },
+        {"folds": True},
     ],
 
     "contact_note": (
