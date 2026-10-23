@@ -23,7 +23,7 @@ let package = Package(
         // and fetches a pinned model; 0.4.1 adds the shared folder. The
         // catalogue stays here. ONNX Runtime comes with this package and
         // with voice-core.
-        .package(url: "https://github.com/snepssen/speech-core", from: "0.4.1"),
+        .package(url: "https://github.com/snepssen/speech-core", from: "0.5.0"),
         // The speech engine Voice Forge and Gateway Forge share: espeak-ng and
         // its data, the phonemizer, Polyphon and Piper inference. Bumped by
         // voice-core's release script, which runs these checks first.
@@ -36,7 +36,6 @@ let package = Package(
             .product(name: "SampleBuffer", package: "speech-core"),
             .product(name: "SileroVAD", package: "speech-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
-            .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
         ]),
         // Everything that can be decided without a model: the segmenter, clock
         // times, language evidence, echoes, catch-up. Held to the Python
@@ -53,6 +52,7 @@ let package = Package(
             .product(name: "ModelStore", package: "speech-core"),
             .product(name: "SampleBuffer", package: "speech-core"),
             .product(name: "SileroVAD", package: "speech-core"),
+            .product(name: "PromptCache", package: "speech-core"),
             .product(name: "VoiceCore", package: "voice-core"),
             .product(name: "WhisperKit", package: "argmax-oss-swift"),
             .product(name: "FluidAudio", package: "FluidAudio"),
