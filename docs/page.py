@@ -11,7 +11,23 @@ conversation numbers are the README's, from a 70-minute recording, and the
 round trip is `scripts/make-snepssen-samples.sh` through `tcrun --into`.
 """
 
+import json
+import pathlib
+
 FONTS = "fonts.css"
+
+# The conversation under the header is spoken by the app's own voice,
+# rendered from the shipped snepssen-polyglot.onnx with voice-polyglot's
+# phonemizer at each language's pace. The word timings were measured from
+# that audio (Parakeet, aligned to the given words), not estimated.
+VOICE = json.loads((pathlib.Path(__file__).parent / "media" / "voice" / "conversation.json")
+                   .read_text(encoding="utf-8"))
+
+
+def said(key, who):
+    line = VOICE[key]
+    return {"who": who, "lang": line["lang"], "audio": f"media/voice/{key}.m4a", "words": line["words"]}
+
 
 LIVE_SCREEN = """<div class="device-row">
   <figure class="phone" aria-label="The iPhone's live screen during the German sample">
@@ -130,6 +146,25 @@ PAGE = {
 
     "header_blocks": [
         {"kind": "raw", "html": LIVE_SCREEN},
+        {"kind": "voice", "title": "At a table, in four languages", "turns": [
+            {"heard": {"who": "Heard · German", "lang": "de",
+                       "text": "Entschuldigung, wissen Sie, wann der nächste Zug nach Köln fährt?"},
+             "said": said("de-train", "Said · English")},
+            {"heard": {"who": "Heard · Polish", "lang": "pl",
+                       "text": "Zostało jeszcze trochę zupy, chcesz dokładkę?"},
+             "said": said("pl-soup", "Said · English")},
+            {"heard": {"who": "Heard · Hungarian", "lang": "hu",
+                       "text": "Holnap fél tízkor találkozunk a piacon."},
+             "said": said("hu-market", "Said · English")},
+            {"heard": {"who": "You, in English", "lang": "en",
+                       "text": "Thank you, it was delicious."},
+             "said": said("en-thanks", "Said · Polish")},
+        ], "caption": (
+            "The voice is the app's own, rendered from the model it ships, and "
+            "each word lights as it is spoken, timed from the audio. The lines "
+            "were written for this page, so the translations are ours rather than "
+            "a recording of the app's; <em>fél tíz</em> is half past nine, the "
+            "clock time a 4B model reads wrong without help.")},
     ],
 
     "sections": [

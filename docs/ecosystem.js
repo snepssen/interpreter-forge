@@ -147,6 +147,101 @@
   addEventListener("hashchange", openTarget);
   openTarget();
 
+  /* A conversation in the app's own voice. Play runs every turn in order:
+     the heard line appears as it would be recognised, a short wait for the
+     end of the thought, then the voice, each word lit by its measured
+     timing. Each turn can be played again on its own. */
+  document.querySelectorAll("[data-voice-demo]").forEach(function (demo) {
+    var play = demo.querySelector(".voice-demo__play");
+    var turns = Array.prototype.slice.call(demo.querySelectorAll(".voice-demo__turn"));
+    var reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var audio = new Audio();
+    audio.preload = "none";
+    var run = 0;
+    var frame = 0;
+
+    function wait(ms, token) {
+      return new Promise(function (resolve, reject) {
+        setTimeout(function () { token === run ? resolve() : reject(); }, ms);
+      });
+    }
+    function reveal(turn, token) {
+      var text = turn.querySelector(".voice-demo__text");
+      if (!text) return Promise.resolve();
+      if (reduced) return wait(500, token);
+      var words = text.textContent.split(" ");
+      text.innerHTML = words.map(function (w) { return '<span class="is-pending">' + w + "</span>"; }).join(" ");
+      var spans = text.querySelectorAll("span");
+      return words.reduce(function (p, _, i) {
+        return p.then(function () { spans[i].classList.remove("is-pending"); return wait(230, token); });
+      }, Promise.resolve()).then(function () { return wait(700, token); });
+    }
+    function speak(turn, token) {
+      var words = Array.prototype.slice.call(turn.querySelectorAll(".voice-demo__word"));
+      return new Promise(function (resolve, reject) {
+        audio.src = turn.getAttribute("data-audio");
+        function paint() {
+          if (token !== run) return;
+          var t = audio.currentTime;
+          words.forEach(function (w) {
+            var start = parseFloat(w.getAttribute("data-start"));
+            var end = parseFloat(w.getAttribute("data-end"));
+            w.classList.toggle("is-now", t >= start && t < end + 0.05);
+            w.classList.toggle("is-said", t >= end + 0.05);
+          });
+          frame = requestAnimationFrame(paint);
+        }
+        audio.onended = function () {
+          cancelAnimationFrame(frame);
+          words.forEach(function (w) { w.classList.remove("is-now"); w.classList.add("is-said"); });
+          token === run ? resolve() : reject();
+        };
+        audio.onerror = function () { cancelAnimationFrame(frame); reject(); };
+        audio.play().then(paint, reject);
+      });
+    }
+    function reset() {
+      demo.classList.remove("is-playing");
+      turns.forEach(function (turn) {
+        turn.classList.remove("is-current");
+        turn.querySelectorAll(".voice-demo__word").forEach(function (w) { w.classList.remove("is-now", "is-said"); });
+        var text = turn.querySelector(".voice-demo__text");
+        if (text) text.textContent = text.textContent;
+      });
+      play.setAttribute("aria-pressed", "false");
+      play.textContent = "Play the conversation";
+    }
+    function stop() {
+      run += 1;
+      audio.pause();
+      cancelAnimationFrame(frame);
+      reset();
+    }
+    function perform(list) {
+      stop();
+      var token = run;
+      demo.classList.add("is-playing");
+      play.setAttribute("aria-pressed", "true");
+      play.textContent = "Stop";
+      return list.reduce(function (p, turn) {
+        return p.then(function () {
+          turns.forEach(function (t) { t.classList.toggle("is-current", t === turn); });
+          return reveal(turn, token).then(function () { return speak(turn, token); });
+        }).then(function () { return wait(450, token); });
+      }, Promise.resolve()).then(function () { if (token === run) reset(); }, function () {});
+    }
+
+    play.hidden = false;
+    play.addEventListener("click", function () {
+      play.getAttribute("aria-pressed") === "true" ? stop() : perform(turns);
+    });
+    turns.forEach(function (turn) {
+      var again = turn.querySelector(".voice-demo__again");
+      again.hidden = false;
+      again.addEventListener("click", function () { perform([turn]); });
+    });
+  });
+
   /* On the hub the paw eases through every project's accent, since the hub
      belongs to all of them: each stop holds, then smoothsteps into the next.
      A project page keeps its own accent, which the stylesheet already gives

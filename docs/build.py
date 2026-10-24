@@ -289,8 +289,10 @@ def grid_inner(ecosystem, slug):
     the whole point -- so they are separable from the chrome around them.
     """
     copy = ecosystem["grid"]
+    projects = [p for p in ecosystem["projects"] if p.get("kind") != "foundation"]
+    foundations = [p for p in ecosystem["projects"] if p.get("kind") == "foundation"]
     cards = []
-    for number, project in enumerate(ecosystem["projects"], start=1):
+    for number, project in enumerate(projects, start=1):
         here = ' aria-current="page"' if project["slug"] == slug else ""
         # A picture of the page rather than a glyph, and keyed on the reader's
         # theme the same way siphon's figures are: a dark thumbnail on a light
@@ -303,6 +305,8 @@ def grid_inner(ecosystem, slug):
       <span class="ecosystem-card__go">{project.get('go', f"Explore {project['name']} →")}</span>
     </a>""")
     joined = "\n".join(cards)
+    rows = "\n".join(foundation_row(ecosystem, f) for f in foundations)
+    found = copy.get("foundations", {})
     return f"""  <div class="ecosystem-more__head">
     <div>
       <p class="ecosystem-kicker">{copy['kicker']}</p>
@@ -312,7 +316,42 @@ def grid_inner(ecosystem, slug):
   </div>
   <div class="ecosystem-grid">
 {joined}
+  </div>
+  <div class="ecosystem-foundations">
+    <div class="ecosystem-foundations__head">
+      <p class="ecosystem-kicker">{found.get('kicker', 'Foundations')}</p>
+      <p>{found.get('intro', '')}</p>
+    </div>
+    <ul>
+{rows}
+    </ul>
   </div>"""
+
+
+def built_on(project):
+    """What a project is made from: its Swift packages and anything named beside them."""
+    return list(project.get("swift", {}).get("uses", [])) + list(project.get("built_on", []))
+
+
+def foundation_row(ecosystem, foundation):
+    """A foundation is a repository, not a page, so it is listed as one: what
+    it is, which projects it is in, and that the link leaves for GitHub.
+    "Used by" is worked out from what each project says it is built on, so it
+    cannot drift from the dependencies themselves."""
+    users = [p for p in ecosystem["projects"]
+             if p.get("kind") != "foundation" and foundation["slug"] in built_on(p)]
+    if foundation.get("used_by"):
+        used = foundation["used_by"]
+    elif users:
+        used = both([p["name"] for p in users])
+    else:
+        used = ""
+    used = f'<span class="ecosystem-foundation__used">Used by {used}</span>' if used else ""
+    return f"""      <li><a class="ecosystem-foundation" data-project="{foundation['slug']}" style="--card-accent: var({foundation['accent']})" href="{foundation['url']}">
+        <span class="ecosystem-foundation__name">{foundation['name']}<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">{foundation['blurb']}</span>
+        {used}
+      </a></li>"""
 
 
 def grid(ecosystem, slug):
@@ -408,9 +447,45 @@ def block(item):
             for card in item["cards"]
         )
         return f'  <div class="cards">\n{cards}\n  </div>'
+    if kind == "voice":
+        return voice_demo(item)
     if kind == "raw":
         return item["html"]
     raise SystemExit(f"build.py does not know the block kind {kind!r}")
+
+
+def voice_demo(item):
+    """A conversation played back in the app's own voice.
+
+    Each turn may have a `heard` line, shown as text the way it is recognised,
+    and a `said` line: the voice's audio and its word timings, measured from
+    the audio rather than guessed, so the words light as they are spoken.
+    Without script every line still reads in full and nothing pretends to play.
+    """
+    def words(said):
+        return "".join(f'<span class="voice-demo__word" data-start="{start}" data-end="{end}">{word}</span> '
+                       for word, start, end in said["words"]).rstrip()
+    turns = []
+    for number, turn in enumerate(item["turns"]):
+        heard = turn.get("heard")
+        said = turn["said"]
+        heard_html = (f'\n      <p class="voice-demo__heard"><span class="voice-demo__who">{heard["who"]}</span>'
+                      f'<span class="voice-demo__text" lang="{heard["lang"]}">{heard["text"]}</span></p>') if heard else ""
+        turns.append(f"""    <li class="voice-demo__turn" data-audio="{said['audio']}">{heard_html}
+      <p class="voice-demo__said"><span class="voice-demo__who">{said['who']}</span>
+        <span class="voice-demo__line" lang="{said['lang']}">{words(said)}</span></p>
+      <button class="voice-demo__again" type="button" aria-label="Play this line again" hidden>▶</button>
+    </li>""")
+    caption = f'\n  <p class="caption">{item["caption"]}</p>' if item.get("caption") else ""
+    return f"""  <div class="voice-demo" data-voice-demo>
+  <div class="voice-demo__bar">
+    <span class="voice-demo__title">{item.get('title', '')}</span>
+    <button class="voice-demo__play" type="button" hidden>Play the conversation</button>
+  </div>
+  <ol class="voice-demo__turns">
+{chr(10).join(turns)}
+  </ol>{caption}
+  </div>"""
 
 
 def figure(item):

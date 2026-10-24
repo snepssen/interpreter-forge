@@ -28,6 +28,7 @@
   --eco-sitecore: #b9c3d0;
   --eco-companion: #ff8ab8;
   --eco-speechcore: #6ed9a0;
+  --eco-workshopcore: #d9bf8f;
   --eco-current: var(--eco-protoke);
   --ground: #121212;
   --surface: #1c1c1e;
@@ -79,6 +80,8 @@
     --eco-sitecore: #475366;
     --eco-companion: #a04e6e;
     --eco-speechcore: #0f7923;
+  --eco-workshopcore: #7a5a22;
+    --eco-workshopcore: #7a5a22;
     --ground: #f5f5f7;
     --surface: #ffffff;
     --raise: #e8e8ed;
@@ -152,6 +155,7 @@ body[data-project="voice-polyglot"] { --eco-current: var(--eco-polyglot); }
 body[data-project="voice-core"] { --eco-current: var(--eco-voicecore); }
 body[data-project="speech-core"] { --eco-current: var(--eco-speechcore); }
 body[data-project="site-core"] { --eco-current: var(--eco-sitecore); }
+body[data-project="workshop-core"] { --eco-current: var(--eco-workshopcore); }
 /* Set where the accent is, not on :root: a var() resolves where it is
    declared, so on :root every page would glow in the default accent. */
 body { --eco-glow: var(--eco-current); }
@@ -517,6 +521,119 @@ section[id], header[id], h2[id], .fold[id], .ecosystem-more {
 header.mast, header#top {
   border-bottom: 0;
   padding: 36px 0 8px;
+}
+
+/* ------------------------------------------------------- the foundations */
+/* Repositories, not pages: a compact list under the cards, with no artwork,
+   saying where each one is used and that its link leaves for GitHub. */
+.ecosystem-foundations {
+  margin-top: 40px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+.ecosystem-foundations__head { display: grid; gap: 6px; margin-bottom: 18px; max-width: 64ch; }
+.ecosystem-foundations__head p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+.ecosystem-foundations ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ecosystem-foundation {
+  display: grid;
+  gap: 6px;
+  height: 100%;
+  padding: 16px 18px;
+  background: var(--ground);
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--card-accent);
+}
+.ecosystem-foundation:hover,
+.ecosystem-foundation:focus-visible { background: color-mix(in srgb, var(--card-accent) 7%, var(--ground)); }
+.ecosystem-foundation__name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font: 600 15px/1.3 var(--eco-mono);
+  color: var(--card-accent);
+}
+.ecosystem-foundation__out { color: var(--muted); font: 500 12px/1 var(--eco-sans); white-space: nowrap; }
+.ecosystem-foundation__what { color: var(--ink); font-size: 14px; line-height: 1.5; }
+.ecosystem-foundation__used { color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+/* ------------------------------------------------------ the voice, spoken */
+.voice-demo {
+  margin: 28px 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--plate);
+  overflow: hidden;
+}
+.voice-demo__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.voice-demo__title { color: var(--muted); font: 600 12px/1.3 var(--eco-mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.voice-demo__play {
+  padding: 8px 14px;
+  border: 1px solid var(--eco-current);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--eco-current);
+  font: 600 13px/1 var(--eco-sans);
+  cursor: pointer;
+}
+.voice-demo__play:hover, .voice-demo__play[aria-pressed="true"] { background: var(--eco-current); color: var(--ground); }
+.voice-demo__turns { margin: 0; padding: 6px 0; list-style: none; }
+.voice-demo__turn {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  padding: 14px 52px 14px 16px;
+  border-left: 2px solid transparent;
+  transition: border-color 200ms ease, background 200ms ease;
+}
+.voice-demo__turn + .voice-demo__turn { border-top: 1px solid var(--line); }
+.voice-demo__turn.is-current { border-left-color: var(--eco-current); background: color-mix(in srgb, var(--eco-current) 5%, transparent); }
+.voice-demo__heard, .voice-demo__said { display: grid; gap: 3px; margin: 0; }
+.voice-demo__who { color: var(--muted); font: 600 11px/1.3 var(--eco-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.voice-demo__text { color: var(--muted); font-style: italic; font-size: 16px; line-height: 1.5; }
+.voice-demo__line { font-size: 19px; line-height: 1.45; color: var(--ink); }
+/* While it plays: what is still to come is quiet, what was said is ink, and
+   the word being spoken carries the page's accent. */
+.voice-demo.is-playing .voice-demo__turn.is-current .voice-demo__word { color: color-mix(in srgb, var(--ink) 38%, transparent); transition: color 120ms ease; }
+.voice-demo.is-playing .voice-demo__turn.is-current .voice-demo__word.is-said { color: var(--ink); }
+.voice-demo.is-playing .voice-demo__turn.is-current .voice-demo__word.is-now {
+  color: var(--eco-current);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--eco-current) 55%, transparent);
+}
+.voice-demo__text .is-pending { opacity: 0; }
+.voice-demo__again {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+}
+.voice-demo__again:hover, .voice-demo__again:focus-visible { color: var(--eco-current); border-color: currentColor; }
+.voice-demo > .caption { margin: 0; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) {
+  .voice-demo__turn, .voice-demo__word { transition: none; }
 }
 
 /* ------------------------------------------------------------- the folds */

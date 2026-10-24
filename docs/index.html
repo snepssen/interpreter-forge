@@ -85,6 +85,7 @@
       <a data-project="voice-polyglot" style="--project-accent: var(--eco-polyglot)" href="https://github.com/snepssen/voice-polyglot">voice-polyglot</a>
       <a data-project="voice-core" style="--project-accent: var(--eco-voicecore)" href="https://github.com/snepssen/voice-core">voice-core</a>
       <a data-project="speech-core" style="--project-accent: var(--eco-speechcore)" href="https://github.com/snepssen/speech-core">speech-core</a>
+      <a data-project="workshop-core" style="--project-accent: var(--eco-workshopcore)" href="https://github.com/snepssen/workshop-core">workshop-core</a>
       <a data-project="site-core" style="--project-accent: var(--eco-sitecore)" href="https://github.com/snepssen/site-core">site-core</a>
     </div>
   </div>
@@ -131,6 +132,39 @@
     rather than photographed from someone's real conversation.</p>
   </div>
 </div>
+  <div class="voice-demo" data-voice-demo>
+  <div class="voice-demo__bar">
+    <span class="voice-demo__title">At a table, in four languages</span>
+    <button class="voice-demo__play" type="button" hidden>Play the conversation</button>
+  </div>
+  <ol class="voice-demo__turns">
+    <li class="voice-demo__turn" data-audio="media/voice/de-train.m4a">
+      <p class="voice-demo__heard"><span class="voice-demo__who">Heard · German</span><span class="voice-demo__text" lang="de">Entschuldigung, wissen Sie, wann der nächste Zug nach Köln fährt?</span></p>
+      <p class="voice-demo__said"><span class="voice-demo__who">Said · English</span>
+        <span class="voice-demo__line" lang="en"><span class="voice-demo__word" data-start="0.0" data-end="0.56">Excuse</span> <span class="voice-demo__word" data-start="0.56" data-end="0.88">me,</span> <span class="voice-demo__word" data-start="0.88" data-end="1.04">do</span> <span class="voice-demo__word" data-start="1.04" data-end="1.12">you</span> <span class="voice-demo__word" data-start="1.12" data-end="1.36">know</span> <span class="voice-demo__word" data-start="1.36" data-end="1.52">when</span> <span class="voice-demo__word" data-start="1.52" data-end="1.6">the</span> <span class="voice-demo__word" data-start="1.6" data-end="1.84">next</span> <span class="voice-demo__word" data-start="1.84" data-end="2.08">train</span> <span class="voice-demo__word" data-start="2.08" data-end="2.24">to</span> <span class="voice-demo__word" data-start="2.24" data-end="2.8">Cologne</span> <span class="voice-demo__word" data-start="2.88" data-end="3.44">leaves?</span></span></p>
+      <button class="voice-demo__again" type="button" aria-label="Play this line again" hidden>▶</button>
+    </li>
+    <li class="voice-demo__turn" data-audio="media/voice/pl-soup.m4a">
+      <p class="voice-demo__heard"><span class="voice-demo__who">Heard · Polish</span><span class="voice-demo__text" lang="pl">Zostało jeszcze trochę zupy, chcesz dokładkę?</span></p>
+      <p class="voice-demo__said"><span class="voice-demo__who">Said · English</span>
+        <span class="voice-demo__line" lang="en"><span class="voice-demo__word" data-start="0.0" data-end="0.4">There's</span> <span class="voice-demo__word" data-start="0.4" data-end="0.72">still</span> <span class="voice-demo__word" data-start="0.72" data-end="0.96">some</span> <span class="voice-demo__word" data-start="0.96" data-end="1.44">soup</span> <span class="voice-demo__word" data-start="1.44" data-end="2.0">left.</span> <span class="voice-demo__word" data-start="2.0" data-end="2.24">Would</span> <span class="voice-demo__word" data-start="2.24" data-end="2.48">you</span> <span class="voice-demo__word" data-start="2.48" data-end="2.64">like</span> <span class="voice-demo__word" data-start="2.8" data-end="3.68">seconds?</span></span></p>
+      <button class="voice-demo__again" type="button" aria-label="Play this line again" hidden>▶</button>
+    </li>
+    <li class="voice-demo__turn" data-audio="media/voice/hu-market.m4a">
+      <p class="voice-demo__heard"><span class="voice-demo__who">Heard · Hungarian</span><span class="voice-demo__text" lang="hu">Holnap fél tízkor találkozunk a piacon.</span></p>
+      <p class="voice-demo__said"><span class="voice-demo__who">Said · English</span>
+        <span class="voice-demo__line" lang="en"><span class="voice-demo__word" data-start="0.0" data-end="0.32">We'll</span> <span class="voice-demo__word" data-start="0.32" data-end="0.64">meet</span> <span class="voice-demo__word" data-start="0.64" data-end="0.72">at</span> <span class="voice-demo__word" data-start="0.72" data-end="0.96">the</span> <span class="voice-demo__word" data-start="0.96" data-end="1.28">market</span> <span class="voice-demo__word" data-start="1.28" data-end="1.76">tomorrow</span> <span class="voice-demo__word" data-start="1.76" data-end="1.92">at</span> <span class="voice-demo__word" data-start="1.92" data-end="2.24">half</span> <span class="voice-demo__word" data-start="2.24" data-end="2.48">past</span> <span class="voice-demo__word" data-start="2.56" data-end="3.2">nine.</span></span></p>
+      <button class="voice-demo__again" type="button" aria-label="Play this line again" hidden>▶</button>
+    </li>
+    <li class="voice-demo__turn" data-audio="media/voice/en-thanks.m4a">
+      <p class="voice-demo__heard"><span class="voice-demo__who">You, in English</span><span class="voice-demo__text" lang="en">Thank you, it was delicious.</span></p>
+      <p class="voice-demo__said"><span class="voice-demo__who">Said · Polish</span>
+        <span class="voice-demo__line" lang="pl"><span class="voice-demo__word" data-start="0.0" data-end="0.72">Dziękuję,</span> <span class="voice-demo__word" data-start="0.72" data-end="0.96">było</span> <span class="voice-demo__word" data-start="1.04" data-end="1.76">pyszne.</span></span></p>
+      <button class="voice-demo__again" type="button" aria-label="Play this line again" hidden>▶</button>
+    </li>
+  </ol>
+  <p class="caption">The voice is the app's own, rendered from the model it ships, and each word lights as it is spoken, timed from the audio. The lines were written for this page, so the translations are ours rather than a recording of the app's; <em>fél tíz</em> is half past nine, the clock time a 4B model reads wrong without help.</p>
+  </div>
 
 <section id="why">
   <p class="eyebrow">The problem</p>
@@ -314,7 +348,7 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
   <div class="ecosystem-more__head">
     <div>
       <p class="ecosystem-kicker">The wider workshop</p>
-      <h2 id="ecosystem-heading">Thirteen pieces, one local-first practice.</h2>
+      <h2 id="ecosystem-heading">Nine projects, five foundations, one local-first practice.</h2>
     </div>
     <p class="ecosystem-more__intro">Move between guided-meditation authoring, measured speech, live interpreting, a voice companion, lyric video, delivery validation, keeping a Downloads folder empty, and the small field tools that support all of them, on one voice, one speech engine and one hearing layer they share.</p>
   </div>
@@ -382,34 +416,39 @@ uv run translate-core live <span class="c"># the Python rig the apps were measur
       <p>Small utilities for audio inspection, corpus work, authoring, and repeatable checks.</p>
       <span class="ecosystem-card__go">Open the toolbox →</span>
     </a>
-    <a class="ecosystem-card" data-project="voice-polyglot" style="--card-accent: var(--eco-polyglot)" href="https://github.com/snepssen/voice-polyglot">
-      <div class="ecosystem-card__index"><span>10 / VOICE</span><span>Piper · eight languages</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">fél tizenegy</div>
-      <h3>voice-polyglot</h3>
-      <p>Teaching one small voice to speak eight languages, and releasing it for every app that speaks.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
-    <a class="ecosystem-card" data-project="voice-core" style="--card-accent: var(--eco-voicecore)" href="https://github.com/snepssen/voice-core">
-      <div class="ecosystem-card__index"><span>11 / ENGINE</span><span>Swift · macOS · iOS · tested on Linux</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">text → /ipa/ → ids</div>
-      <h3>voice-core</h3>
-      <p>The speech engine the apps share: espeak-ng, the phonemizer and Piper inference, from one source.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
-    <a class="ecosystem-card" data-project="speech-core" style="--card-accent: var(--eco-speechcore)" href="https://github.com/snepssen/speech-core">
-      <div class="ecosystem-card__index"><span>12 / HEARING</span><span>Swift · macOS · iOS</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">mic → vad → store</div>
-      <h3>speech-core</h3>
-      <p>The hearing layer Interpreter and companion-forge share: ObjCExceptions, SileroVAD, SampleBuffer and ModelStore, from one source.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
-    <a class="ecosystem-card" data-project="site-core" style="--card-accent: var(--eco-sitecore)" href="https://github.com/snepssen/site-core">
-      <div class="ecosystem-card__index"><span>13 / PAGES</span><span>Python · HTML</span></div>
-      <div class="ecosystem-card__glyph" aria-hidden="true">one → every page</div>
-      <h3>site-core</h3>
-      <p>The builder and project network every page here shares, kept in one place.</p>
-      <span class="ecosystem-card__go">Open the repository →</span>
-    </a>
+  </div>
+  <div class="ecosystem-foundations">
+    <div class="ecosystem-foundations__head">
+      <p class="ecosystem-kicker">Foundations</p>
+      <p>The parts the projects are built from. They have no page of their own: each is a repository, and the projects are where you see them at work.</p>
+    </div>
+    <ul>
+      <li><a class="ecosystem-foundation" data-project="voice-polyglot" style="--card-accent: var(--eco-polyglot)" href="https://github.com/snepssen/voice-polyglot">
+        <span class="ecosystem-foundation__name">voice-polyglot<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">Teaching one small voice to speak eight languages, and releasing it for every app that speaks.</span>
+        <span class="ecosystem-foundation__used">Used by Interpreter and companion-forge</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="voice-core" style="--card-accent: var(--eco-voicecore)" href="https://github.com/snepssen/voice-core">
+        <span class="ecosystem-foundation__name">voice-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">The speech engine the apps share: espeak-ng, the phonemizer and Piper inference, from one source.</span>
+        <span class="ecosystem-foundation__used">Used by Gateway Forge, Voice Forge, Interpreter and companion-forge</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="speech-core" style="--card-accent: var(--eco-speechcore)" href="https://github.com/snepssen/speech-core">
+        <span class="ecosystem-foundation__name">speech-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">The hearing layer Interpreter and companion-forge share: ObjCExceptions, SileroVAD, SampleBuffer and ModelStore, from one source.</span>
+        <span class="ecosystem-foundation__used">Used by Interpreter and companion-forge</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="workshop-core" style="--card-accent: var(--eco-workshopcore)" href="https://github.com/snepssen/workshop-core">
+        <span class="ecosystem-foundation__name">workshop-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">How the Python tools find the programs they need, and offer to install what is missing, from one source.</span>
+        <span class="ecosystem-foundation__used">Used by Protoke, Media Preflight and siphon</span>
+      </a></li>
+      <li><a class="ecosystem-foundation" data-project="site-core" style="--card-accent: var(--eco-sitecore)" href="https://github.com/snepssen/site-core">
+        <span class="ecosystem-foundation__name">site-core<span class="ecosystem-foundation__out" aria-label="on GitHub">GitHub ↗</span></span>
+        <span class="ecosystem-foundation__what">The builder and project network every page here shares, kept in one place.</span>
+        <span class="ecosystem-foundation__used">Used by every page in the workshop</span>
+      </a></li>
+    </ul>
   </div>
 </section>
 
