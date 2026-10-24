@@ -84,6 +84,19 @@ same checks without touching the phone. Dependency and compilation caches stay
 in place. The explicit **InterpreterPhone** scheme selects the iOS app;
 the Swift package's similarly named Mac executable is a different target.
 
+To put it on every iPhone and iPad you have paired at once (or only those
+named, by part of a name or model, or a UDID):
+
+    apple/iOS/install-devices.sh             # build once, install and launch on each
+    apple/iOS/install-devices.sh --both      # companion-forge's app too, from beside this checkout
+    apple/iOS/install-devices.sh --list      # which devices, without building
+
+It builds with `build-ios.sh --no-install` and then installs that app on
+each device with `devicectl`, ending with what went on where and what
+failed. Signed with a free (personal) team, an install stops opening seven
+days after it was built, so run it again within the week; it prints the
+date. Installing over the old app keeps its models and data.
+
 The phone uses one audio engine for capture and playback. Delayed startup
 notifications with an unchanged route do not stop Live; actual device/format
 changes, stopped engines, interruptions and media resets still ask for a
