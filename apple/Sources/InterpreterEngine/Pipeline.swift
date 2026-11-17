@@ -83,6 +83,9 @@ public final class Pipeline: @unchecked Sendable {
     private let inbox = Inbox()
     private let started = ProcessInfo.processInfo.systemUptime
     public var level: Float { source?.buffer.level ?? 0 }
+    /// Frames the microphone has delivered; nil for a recording.
+    public var microphoneFrames: Int? { (source as? Microphone)?.framesReceived }
+    public var enginesRunning: Bool { audioEngines.allSatisfy(\.isRunning) }
     var audioEngines: [AVAudioEngine] {
         var engines = (source as? Microphone).map { [$0.audioEngine] } ?? []
         if let engine = speaker?.audioEngine, !engines.contains(where: { $0 === engine }) { engines.append(engine) }
