@@ -310,6 +310,22 @@ public final class LiveSession {
         }
         await linguist.forget()
         guard generation == self.generation else { return }
+        #if os(iOS)
+        // Take the audio first and let headphones on another device move here
+        // before the engine is built; the pipeline activates again, unchanged.
+        if demoRecording == nil {
+            let input = PhoneAudio.Input(microphone)
+            do { try PhoneAudio.activate(input) } catch {
+                notice = "Couldn't open the audio: \(error.localizedDescription)"
+                return
+            }
+            await PhoneAudio.settle(input)
+            guard generation == self.generation, active, !Task.isCancelled else {
+                PhoneAudio.deactivate()
+                return
+            }
+        }
+        #endif
         let pipeline = Pipeline(recognizer: recognizer, linguist: linguist, voice: voice, vad: vad)
         let (events, continuation) = AsyncStream<PipelineEvent>.makeStream()
         do {
@@ -344,10 +360,27 @@ public final class LiveSession {
         #endif
         phase = .live
         observeAudioChanges()
+        let liveSince = ContinuousClock.now
         meter = Task { [weak self] in
+            var checked = false
             while !Task.isCancelled {
                 self?.level = pipeline.level
                 self?.speaking = (pipeline.speaker?.backlog ?? 0) > 0.05
+                // A capture that started but delivers nothing looks like a quiet
+                // room; after two seconds it is a dead microphone. Say so.
+                if !checked, ContinuousClock.now - liveSince > .seconds(2), let frames = pipeline.microphoneFrames {
+                    checked = true
+                    #if os(iOS)
+                    audioLog("after 2 s: \(frames) frames, engines running: \(pipeline.enginesRunning) · \(PhoneAudio.routeSummary)")
+                    #endif
+                    if frames == 0 {
+                        self?.stop()
+                        self?.notice = pipeline.enginesRunning
+                            ? "The microphone started but isn't delivering any sound. Press Live to try again."
+                            : "The audio stopped right after it started. Press Live to try again."
+                        return
+                    }
+                }
                 try? await Task.sleep(for: .milliseconds(80))
             }
         }
@@ -524,6 +557,7 @@ public final class LiveSession {
     }
 
     private func audioChanged(_ change: AudioChange, generation: UUID) {
+        audioLog("audio change \(change), restart: \(change.requiresRestart)")
         guard isLive, self.generation == generation, change.requiresRestart else { return }
         stop()
         notice = "The audio route changed or was interrupted. Press Live to restart."

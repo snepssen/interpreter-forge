@@ -1,6 +1,7 @@
 @preconcurrency import AVFoundation
 import Foundation
 import ObjCExceptions
+import os
 import SampleBuffer
 #if os(macOS)
 import CoreAudio
@@ -9,8 +10,18 @@ import CoreAudio
 public enum AudioFailure: LocalizedError {
     case noInput
     public var errorDescription: String? {
-        "The microphone isn't delivering audio. Allow Interpreter in System Settings → Privacy & Security → Microphone."
+        // Access is asked for before the audio opens, so this is a route that
+        // isn't ready: most often headphones still moving to this device.
+        "The microphone isn't ready yet. If headphones are switching to this device, wait a moment and press Live again."
     }
+}
+
+/// Audio diagnostics: printed, so `devicectl device process launch --console`
+/// shows them, and in the unified log under com.snepssen.interpreter / audio.
+private let audioLogger = Logger(subsystem: "com.snepssen.interpreter", category: "audio")
+func audioLog(_ message: String) {
+    audioLogger.notice("\(message, privacy: .public)")
+    print("[audio] \(message)")
 }
 
 /// AVAudioEngine raises NSException for misuse; this makes it a Swift error.
@@ -71,6 +82,13 @@ public final class Microphone: AudioSource, @unchecked Sendable {
     private var converter: AVAudioConverter?
     private var tapInstalled = false
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
+    private let counting = NSLock()
+    private var frames = 0
+    /// Input frames the tap has delivered, so a capture that started but hears
+    /// nothing can be told apart from a quiet room.
+    public var framesReceived: Int { counting.withLock { frames } }
+    /// Evens out loud and quiet speakers; touched only on the tap's thread.
+    private var autoGain = AutoGain()
 
     public init(device: String? = nil, engine sharedEngine: AVAudioEngine? = nil) throws {
         audioEngine = sharedEngine ?? AVAudioEngine()
@@ -86,6 +104,7 @@ public final class Microphone: AudioSource, @unchecked Sendable {
         let format = input.outputFormat(forBus: 0)
         // Before microphone access is granted the input has no format at all, and
         // a tap on it raises an exception rather than failing.
+        audioLog("microphone format \(format.sampleRate) Hz × \(format.channelCount)")
         guard format.sampleRate > 0, format.channelCount > 0 else { throw AudioFailure.noInput }
         converter = AVAudioConverter(from: format, to: target)
         guard converter != nil else { throw AudioFailure.noInput }
@@ -98,7 +117,9 @@ public final class Microphone: AudioSource, @unchecked Sendable {
                 engine.prepare()
             }
             try engine.start()
+            audioLog("microphone engine running: \(engine.isRunning)")
         } catch {
+            audioLog("microphone failed to start: \(error)")
             stop()
             throw error
         }
@@ -115,6 +136,7 @@ public final class Microphone: AudioSource, @unchecked Sendable {
     public var finished: Bool { false }
 
     private func receive(_ pcm: AVAudioPCMBuffer) {
+        counting.withLock { frames += Int(pcm.frameLength) }
         guard let converter else { return }
         let capacity = AVAudioFrameCount(Double(pcm.frameLength) * 16_000 / pcm.format.sampleRate) + 32
         guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
@@ -130,7 +152,9 @@ public final class Microphone: AudioSource, @unchecked Sendable {
             return pcm
         }
         guard error == nil, let data = out.floatChannelData else { return }
-        buffer.append(Array(UnsafeBufferPointer(start: data[0], count: Int(out.frameLength))))
+        var samples = Array(UnsafeBufferPointer(start: data[0], count: Int(out.frameLength)))
+        autoGain.process(&samples)
+        buffer.append(samples)
     }
 }
 
@@ -302,6 +326,59 @@ public enum PhoneAudio {
             }
         }
         try session.setActive(true)
+        audioLog("session \(input.rawValue): \(routeSummary)")
+    }
+
+    /// After activation, headphones playing another device's sound (AirPods'
+    /// automatic switching) move here, which takes a second or two; an audio
+    /// engine built before then finds an input with no format, or loses its
+    /// route as soon as it starts. Wait until the route has the headset, as the
+    /// microphone or for listening, and has held still; after the timeout the
+    /// start goes ahead and reports what it finds.
+    public static func settle(_ input: Input, timeout: Duration = .seconds(4)) async {
+        let session = AVAudioSession.sharedInstance()
+        let bluetooth: Set<AVAudioSession.Port> = [.bluetoothHFP, .bluetoothA2DP, .bluetoothLE]
+        let headsetNearby = session.availableInputs?.contains { bluetooth.contains($0.portType) } ?? false
+        func ready() -> Bool {
+            let route = session.currentRoute
+            guard session.sampleRate > 0, session.inputNumberOfChannels > 0, !route.inputs.isEmpty else { return false }
+            guard headsetNearby else { return true }
+            return input.usesHeadphones
+                ? route.inputs.contains { bluetooth.contains($0.portType) }
+                : route.outputs.contains { bluetooth.contains($0.portType) }
+        }
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        var steady: (state: AudioRouteState, since: ContinuousClock.Instant)?
+        while clock.now < deadline, !Task.isCancelled {
+            if ready() {
+                let state = routeState
+                if let held = steady, held.state == state {
+                    if clock.now - held.since >= .milliseconds(300) {
+                        audioLog("route settled: \(routeSummary)")
+                        return
+                    }
+                } else {
+                    steady = (state, clock.now)
+                }
+            } else {
+                steady = nil
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        audioLog("route not settled after \(timeout): \(routeSummary)")
+    }
+
+    /// The route as it stands, for the diagnostics log.
+    static var routeSummary: String {
+        let session = AVAudioSession.sharedInstance()
+        let ports = { (ports: [AVAudioSessionPortDescription]) in
+            ports.map { "\($0.portName) [\($0.portType.rawValue)]" }.joined(separator: ", ")
+        }
+        return "in: \(ports(session.currentRoute.inputs)) · out: \(ports(session.currentRoute.outputs))"
+            + " · \(session.sampleRate) Hz, \(session.inputNumberOfChannels) in / \(session.outputNumberOfChannels) out"
+            + " · input available: \(session.isInputAvailable)"
+            + " · input muted: \(AVAudioApplication.shared.isInputMuted)"
     }
 
     /// The category alone, at launch, without taking the audio: only then does
