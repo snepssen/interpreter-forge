@@ -13,7 +13,9 @@ public enum PipelineEvent: Sendable {
     case silent(index: Int, Silence, translation: String?)
     /// Translated and queued to play at `playStart` (session seconds). `indices`
     /// are the pieces merged into it; `lags` each one's wait from its end to then.
-    case interpreted(indices: [Int], translation: String, playStart: Double, lags: [Double], brief: Bool, pace: Double)
+    /// `into` names the language in a two-way conversation; nil one way round.
+    case interpreted(indices: [Int], translation: String, playStart: Double, lags: [Double], brief: Bool, pace: Double,
+                     into: String? = nil)
     /// Terminal failure: capture and playback have stopped.
     case failed(String)
 }
@@ -29,10 +31,24 @@ protocol SpeechInterpreting: Sendable {
     func gate(_ text: String) async -> Silence?
     func remember(_ text: String) async
     func translate(_ text: String, brief: Bool) async throws -> String
+    /// Which way a piece goes in a two-way conversation; nil one way round.
+    func direction(_ text: String) async -> Direction?
+    func translate(_ text: String, brief: Bool, direction: Direction?) async throws -> String
+}
+extension SpeechInterpreting {
+    func direction(_ text: String) async -> Direction? { nil }
+    func translate(_ text: String, brief: Bool, direction: Direction?) async throws -> String {
+        try await translate(text, brief: brief)
+    }
 }
 protocol SpeechSynthesizing: Sendable {
     var sampleRate: Double { get }
     func speak(_ text: String, pace: Double) throws -> [Float]
+    /// In `language`, or the voice's own when nil.
+    func speak(_ text: String, pace: Double, language: String?) throws -> [Float]
+}
+extension SpeechSynthesizing {
+    func speak(_ text: String, pace: Double, language: String?) throws -> [Float] { try speak(text, pace: pace) }
 }
 protocol SpeechDetecting: Sendable {
     var lastSpeech: Double { get }
@@ -40,7 +56,9 @@ protocol SpeechDetecting: Sendable {
     func silence(at: Double) -> Double
 }
 extension Recognizer: SpeechRecognizing {}
-extension Linguist: SpeechInterpreting {}
+extension Linguist: SpeechInterpreting {
+    func translate(_ text: String, brief: Bool) throws -> String { try translate(text, brief: brief, direction: nil) }
+}
 extension Voice: SpeechSynthesizing {}
 extension SileroVAD: SpeechDetecting {}
 
@@ -286,13 +304,21 @@ public final class Pipeline: @unchecked Sendable {
     // MARK: interpreting
 
     private func interpret(_ speaker: Speaker, _ events: @Sendable (PipelineEvent) -> Void) async {
+        // What the voice said, in a two-way conversation: from the phone's
+        // speaker the microphone hears it, and it would go back the other way.
+        var echoes = SpokenEchoes()
         while !Task.isCancelled, let waiting = await inbox.takeAll() {
-            var foreign: [Segment] = []
+            var foreign: [(segment: Segment, direction: Direction?)] = []
             do {
                 // Everything waiting goes as one: what the gate turns away set
-                // aside, the rest merged into a single translation.
+                // aside, the rest merged into a single translation. Both ways
+                // round, one per run of the same side.
                 for segment in waiting {
                     try Task.checkCancellation()
+                    if echoes.heard(segment.text, from: segment.start, to: segment.end) {
+                        events(.silent(index: segment.index, .echo, translation: nil))
+                        continue
+                    }
                     let reason = await linguist.gate(segment.text)
                     try Task.checkCancellation()
                     if let why = reason {
@@ -302,43 +328,89 @@ public final class Pipeline: @unchecked Sendable {
                         }
                         events(.silent(index: segment.index, why, translation: nil))
                     } else {
-                        foreign.append(segment)
+                        foreign.append((segment, await linguist.direction(segment.text)))
+                        try Task.checkCancellation()
                     }
-                }
-                guard !foreign.isEmpty else { continue }
-                let piece = Segment.combine(foreign)
-                let brief = summarises && linguist.model.judges && (backlog?.brief(speaker.backlog) ?? false)
-                let translation = try await linguist.translate(piece.text, brief: brief)
-                try Task.checkCancellation()
-                if echoes(piece.text, translation) {
-                    for segment in foreign {
-                        events(.silent(index: segment.index, .echo, translation: translation))
-                    }
-                    continue
-                }
-                let pace = backlog?.pace(speaker.backlog) ?? 1
-                let start: Double
-                if speaks {
-                    let samples = try voice.speak(translation, pace: pace)
-                    try Task.checkCancellation()
-                    start = speaker.play(samples)
-                } else {
-                    start = clock()  // shown now: the lag is the wait for the text
-                }
-                let ends = piece.parts.isEmpty ? [piece.end] : piece.parts
-                events(.interpreted(indices: foreign.map(\.index), translation: translation, playStart: start,
-                                    lags: ends.map { start - $0 }, brief: brief, pace: pace))
-            } catch let concern as UnclearTranslation {
-                if Task.isCancelled { return }
-                for segment in foreign {
-                    events(.silent(index: segment.index, .unclear, translation: concern.localizedDescription))
                 }
             } catch {
                 if Task.isCancelled { return }
                 fail("Interpreting: \(error.localizedDescription)", events)
                 return
             }
+            for run in Self.runs(foreign) {
+                do {
+                    try await say(run.segments, run.direction, speaker, &echoes, events)
+                } catch let concern as UnclearTranslation {
+                    if Task.isCancelled { return }
+                    for segment in run.segments {
+                        events(.silent(index: segment.index, .unclear, translation: concern.localizedDescription))
+                    }
+                } catch {
+                    if Task.isCancelled { return }
+                    fail("Interpreting: \(error.localizedDescription)", events)
+                    return
+                }
+            }
         }
+    }
+
+    /// Consecutive pieces going the same way, in order.
+    static func runs(_ pieces: [(segment: Segment, direction: Direction?)])
+        -> [(segments: [Segment], direction: Direction?)] {
+        var runs: [(segments: [Segment], direction: Direction?)] = []
+        for piece in pieces {
+            if let last = runs.last, last.direction == piece.direction {
+                runs[runs.count - 1].segments.append(piece.segment)
+            } else {
+                runs.append(([piece.segment], piece.direction))
+            }
+        }
+        return runs
+    }
+
+    /// Translate `segments` as one piece and say it.
+    private func say(_ segments: [Segment], _ direction: Direction?, _ speaker: Speaker,
+                     _ echoes: inout SpokenEchoes, _ events: @Sendable (PipelineEvent) -> Void) async throws {
+        let piece = Segment.combine(segments)
+        let brief = summarises && linguist.model.judges && (backlog?.brief(speaker.backlog) ?? false)
+        var direction = direction
+        var translation = try await linguist.translate(piece.text, brief: brief, direction: direction)
+        try Task.checkCancellation()
+        if let way = direction, InterpreterCore.echoes(piece.text, translation) {
+            // Translated into its own language: it was the other side
+            // speaking. Once the other way round; a second echo is garbled.
+            let other = try await linguist.translate(piece.text, brief: brief, direction: way.reversed)
+            try Task.checkCancellation()
+            if !InterpreterCore.echoes(piece.text, other) {
+                direction = way.reversed
+                translation = other
+            }
+        }
+        if InterpreterCore.echoes(piece.text, translation) {
+            for segment in segments {
+                events(.silent(index: segment.index, .echo, translation: translation))
+            }
+            return
+        }
+        let pace = backlog?.pace(speaker.backlog) ?? 1
+        var start = clock()  // shown now: the lag is the wait for the text
+        if speaks {
+            do {
+                let samples = try voice.speak(translation, pace: pace, language: direction?.into)
+                try Task.checkCancellation()
+                start = speaker.play(samples)
+                if direction != nil {
+                    echoes.said(translation, from: start, to: start + Double(samples.count) / voice.sampleRate)
+                }
+            } catch where direction != nil && !(error is CancellationError) {
+                // The other side's language may be one the voice can't read:
+                // shown, not spoken, rather than ending the conversation.
+                audioLog("voice couldn't say \(direction!.into): \(error.localizedDescription)")
+            }
+        }
+        let ends = piece.parts.isEmpty ? [piece.end] : piece.parts
+        events(.interpreted(indices: segments.map(\.index), translation: translation, playStart: start,
+                            lags: ends.map { start - $0 }, brief: brief, pace: pace, into: direction?.into))
     }
 }
 

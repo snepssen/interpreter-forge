@@ -82,7 +82,7 @@ try pipeline.start(source: Recording(samples), speaker: nil, audible: false) { e
             tally.silent[why, default: 0] += 1
             print("  #\(index) \(why.rawValue), not spoken")
             if why == .unclear, let detail { print("    \(detail)") }
-        case .interpreted(let indices, let translation, let start, let lags, let brief, let pace):
+        case .interpreted(let indices, let translation, let start, let lags, let brief, let pace, _):
             tally.lags += lags
             tally.said.append(["indices": indices, "translation": translation, "start": start, "lag": lags.max() ?? 0])
             let marks = (brief ? " [brief]" : "") + (pace > 1 ? String(format: " [x%.2f]", pace) : "")

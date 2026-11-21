@@ -162,10 +162,12 @@ public struct ContentView: View {
     }
 
     private var readyTitle: String {
+        // Both ways round the guest hears the voice too: the speaker is fine.
+        if session.conversation != nil { return "Ready for a conversation" }
         #if os(iOS)
-        output.isHeadphones || output.standby != nil ? "Ready to interpret" : "Put your headphones in"
+        return output.isHeadphones || output.standby != nil ? "Ready to interpret" : "Put your headphones in"
         #else
-        "Ready to interpret"
+        return "Ready to interpret"
         #endif
     }
 
@@ -173,7 +175,10 @@ public struct ContentView: View {
         let chosen = session.spoken
         let into = session.languageName(session.target)
         var detail: String
-        if chosen.isEmpty {
+        if let conversation = session.conversation {
+            let (guest, host) = (session.languageName(conversation.guest), session.languageName(conversation.host))
+            detail = "A conversation both ways: \(guest) is spoken in \(host) and \(host) in \(guest), without stopping between turns; other languages are skipped."
+        } else if chosen.isEmpty {
             detail = "Other languages are spoken to you in \(into)."
         } else {
             let verb = chosen.count == 1 ? "is" : "are"
@@ -494,6 +499,8 @@ struct LanguageMenu: View {
         if selected.count > 2 { return "\(selected.count) languages" }
         return session.languageList(selected)
     }
+    /// "↔" when one language is chosen: the two are interpreted both ways.
+    private var arrow: String { session.conversation == nil ? " → " : " ↔ " }
     private func binding(_ code: String) -> Binding<Bool> {
         Binding(get: { session.languages.contains(code) }, set: { on in
             if on && !session.languages.contains(code) { session.languages.append(code) }
@@ -515,7 +522,7 @@ struct LanguageMenu: View {
             Button { session.languages = [target] } label: {
                 if any { Label("Any language", systemImage: "checkmark") } else { Text("Any language") }
             }
-            Section("Only these languages") {
+            Section("Only these languages · one for a two-way conversation") {
                 ForEach(all, id: \.code) { language in
                     Toggle(language.name, isOn: binding(language.code))
                 }
@@ -523,7 +530,7 @@ struct LanguageMenu: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "globe")
-                Text(summary + " → " + into).lineLimit(1)
+                Text(summary + arrow + into).lineLimit(1)
                 if !locked { Image(systemName: "chevron.down").font(.caption2.weight(.bold)) }
             }
             .font(.callout.weight(.medium))
@@ -539,7 +546,9 @@ struct LanguageMenu: View {
         .disabled(locked)
         .help("Choose the languages spoken here, and the one they are interpreted into.")
         .accessibilityLabel("Languages")
-        .accessibilityValue((any ? "Any supported language" : session.languageList(selected)) + " into " + into)
+        .accessibilityValue((any ? "Any supported language" : session.languageList(selected))
+                            + (session.conversation == nil ? " into " : " and ") + into
+                            + (session.conversation == nil ? "" : ", both ways"))
     }
 }
 
