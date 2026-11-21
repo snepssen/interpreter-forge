@@ -21,9 +21,17 @@ cp "$VOICE" Resources/snepssen-polyglot.onnx
 cp "$VOICE.json" Resources/snepssen-polyglot.onnx.json
 echo "voice: $VOICE"
 rm -rf Resources/espeak-ng-data  # now voice-core's, in its resource bundle
-[ -s "$REPO/models/silero_vad.onnx" ] || curl -fsSL -o "$REPO/models/silero_vad.onnx" \
-  https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx
-cp "$REPO/models/silero_vad.onnx" Resources/
+# models/ links to the Archive drive; when it is unplugged, keep the VAD from the last build.
+if [ -d "$REPO/models/" ]; then
+  [ -s "$REPO/models/silero_vad.onnx" ] || curl -fsSL -o "$REPO/models/silero_vad.onnx" \
+    https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx
+  cp "$REPO/models/silero_vad.onnx" Resources/
+elif [ -s Resources/silero_vad.onnx ]; then
+  echo "warning: models/ is not reachable (Archive drive unplugged?); keeping Resources/silero_vad.onnx" >&2
+else
+  echo "error: models/ is not reachable (Archive drive unplugged?) and there is no Resources/silero_vad.onnx" >&2
+  exit 1
+fi
 
 xcodegen generate --quiet
 # Remove only the generated app, retaining dependency/build caches. A successful
