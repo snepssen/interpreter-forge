@@ -87,3 +87,15 @@ updated app was installed on the iPhone, and the user confirmed that Ultra and
 Whisper both reach working recognition. On the Mac, the model manager switched
 to Whisper, reached Ready, started Live and returned to Ready when stopped.
 Recordings, transcripts, model downloads and built apps remain local.
+
+## The Python rig, 21 November 2026
+
+The Python rig (`src/translate_core/asr.py`) now uses Ultra as well, through
+parakeet-mlx and a pinned bf16 MLX conversion
+([`pisar/parakeet-ultra-mlx`](https://huggingface.co/pisar/parakeet-ultra-mlx)
+of [`moondream/parakeet-ultra`](https://huggingface.co/moondream/parakeet-ultra),
+CC-BY-4.0, after NVIDIA's CC-BY-4.0 v3). On snepssen's 32 polyglot clips it
+scores 7.8% WER, against 14.8% for v3 in the rig and 8.7% for the apps' Ultra;
+on the eight longer recordings 6.3%, against 15.6% and 7.4%. v3 drifted into
+English mid-passage on both long Spanish clips when given the whole clip (not in the live rig's short windows). `--asr v3` keeps the old model.
+Details and limits: [the comparison](recognition-mlx-ultra-2026-11-21.md).

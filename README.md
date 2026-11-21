@@ -15,7 +15,7 @@ also interpret into Polish, Hungarian, German, Dutch, French, Spanish or Italian
 | stage     | model                                        |
 |-----------|----------------------------------------------|
 | VAD       | Silero VAD v5 (ONNX)                         |
-| ASR       | Parakeet TDT 0.6B v3 via `parakeet-mlx` — 25 European languages, punctuated |
+| ASR       | Parakeet Ultra (moondream's post-training of NVIDIA's Parakeet TDT 0.6B v3, CC-BY-4.0) via `parakeet-mlx` — 25 European languages, punctuated; `--asr v3` for plain v3 |
 | translate | Qwen3-4B-Instruct-2507, 4-bit MLX, carrying the last three pieces as context |
 | speak     | Piper; the Python rig uses the voice-forge voice in `../voice-forge`, the apps the polyglot snepssen from `../voice-polyglot` |
 
@@ -170,8 +170,15 @@ session. Then test a session offline to confirm the models are reusable.
 | scheduling | translation first: one GPU | side by side: ASR on the Neural Engine, translation on the GPU |
 
 The timings above were measured with the previous Parakeet v3 recognizer;
-they are not a benchmark of Ultra or Whisper. The Python comparison engine
-continues to use v3.
+they are not a benchmark of Ultra or Whisper. The Python rig now uses Ultra
+too ([`pisar/parakeet-ultra-mlx`](https://huggingface.co/pisar/parakeet-ultra-mlx),
+a bf16 MLX conversion of [`moondream/parakeet-ultra`](https://huggingface.co/moondream/parakeet-ultra),
+pinned): on snepssen's 32 polyglot clips it misses 7.8% of words against v3's
+14.8% and the app's Ultra's 8.7%, at the same MLX speed as v3, about 15× real
+time on an M1 ([the comparison](docs/recognition-mlx-ultra-2026-11-21.md)).
+`--asr v3` keeps the old model; the first rig run downloads Ultra (about
+1.2 GB) into the Hugging Face cache. Ultra is © moondream and v3 © NVIDIA, both
+CC-BY-4.0.
 
 `InterpreterCore` is the Python logic ported (segmenter, clock times, language
 evidence, echoes, catch-up); `tccheck` asks every Python test again and gets

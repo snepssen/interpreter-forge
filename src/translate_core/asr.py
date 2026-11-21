@@ -6,7 +6,14 @@ from parakeet_mlx.audio import get_logmel
 
 from .types import Word
 
-DEFAULT_MODEL = "mlx-community/parakeet-tdt-0.6b-v3"
+MODELS = {
+    "v3": "mlx-community/parakeet-tdt-0.6b-v3",
+    # moondream/parakeet-ultra (CC-BY-4.0), renamed into parakeet-mlx's layout
+    "ultra": "pisar/parakeet-ultra-mlx@67b18a404d0dd8335fbab4fa2a0e54d5349f68de",
+}
+# Ultra: 7.8% WER against v3's 14.8% on the polyglot clips, close to the apps'
+# Ultra (docs/recognition-mlx-ultra-2026-11-21.md).
+DEFAULT_MODEL = MODELS["ultra"]
 CACHE_LIMIT = 1 << 30  # bytes MLX may keep for reuse
 
 
@@ -17,7 +24,7 @@ class ParakeetASR:
         # buffers, and MLX keeps them all for reuse unless told otherwise: 9 GB
         # after 90 s of conversation, and a 16 GB machine deep in swap.
         mx.set_cache_limit(CACHE_LIMIT)
-        self.model = from_pretrained(_local(model_id))
+        self.model = from_pretrained(_local(MODELS.get(model_id, model_id)))
         self.sample_rate = self.model.preprocessor_config.sample_rate
 
     def transcribe(self, audio: np.ndarray, offset: float = 0.0) -> list[Word]:
@@ -53,8 +60,12 @@ def _words(tokens, offset: float) -> list[Word]:
 
 def _local(model_id: str) -> str:
     """The cached copy if there is one: asking the hub first can stall a launch
-    for a minute on a poor connection, just to learn nothing has changed."""
+    for a minute on a poor connection, just to learn nothing has changed.
+
+    `repo@revision` pins a revision; from_pretrained cannot, so a pinned model
+    is always loaded from its downloaded snapshot directory."""
+    repo, _, revision = model_id.partition("@")
     try:
-        return snapshot_download(model_id, local_files_only=True)
+        return snapshot_download(repo, revision=revision or None, local_files_only=True)
     except Exception:
-        return model_id
+        return snapshot_download(repo, revision=revision) if revision else model_id
