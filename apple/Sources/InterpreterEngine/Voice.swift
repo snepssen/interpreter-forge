@@ -46,8 +46,15 @@ public final class Voice: @unchecked Sendable {
 
     /// Mono samples at `sampleRate`, peak-normalised to 0.9.
     public func speak(_ text: String, pace: Double = 1) throws -> [Float] {
+        try speak(text, pace: pace, language: nil)
+    }
+
+    /// In `language`, or `self.language` when nil: a two-way conversation
+    /// speaks each side's language in turn.
+    public func speak(_ text: String, pace: Double = 1, language: String?) throws -> [Float] {
         lock.lock()
         defer { lock.unlock() }
+        let speaking = language ?? self.speaking
         let inference = model.config.inference
         var scale = inference.length_scale
         let ids: [Int]

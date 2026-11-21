@@ -33,9 +33,15 @@ public actor Linguist {
     /// The listener's language, which everything is interpreted into.
     private var target: String
     private var system: String
-    private var history: [(source: String, target: String, language: String)] = []
+    /// Both ways round when exactly one language is spoken here besides the
+    /// listener's: each piece goes into the other's language.
+    private var conversation: Conversation?
+    /// What was said (`source`, in `language`) and what it became (`target`, in `into`).
+    private var history: [(source: String, target: String, language: String, into: String)] = []
     private let contextPieces = 3
-    private var translator: PromptCache
+    /// One attention cache per language translated into, so a conversation
+    /// switching sides doesn't read its instructions again at every turn.
+    private var translators: [String: PromptCache] = [:]
     private var questions: [String: PromptCache] = [:]
     private let yes: [Int32]
     private let no: [Int32]
@@ -60,11 +66,12 @@ public actor Linguist {
         stops = Set(([context.tokenizer.eosTokenId] + ["<end_of_turn>", "<turn|>", "<|im_end|>", "<|endoftext|>"]
                 .map { context.tokenizer.convertTokenToId($0) }).compactMap { $0 })
             .union(context.configuration.extraEOSTokens.compactMap { context.tokenizer.convertTokenToId($0) })
-        translator = try PromptCache(context.model)
+        translators[target] = try PromptCache(context.model)
         self.model = model
         self.context = context
         self.target = target
         self.languages = languages.filter { $0 != target }
+        conversation = Conversation(spoken: self.languages, target: target)
         system = Self.system(for: self.languages, into: target)
     }
 
@@ -74,7 +81,20 @@ public actor Linguist {
         if self.languages != languages || self.target != target { forget() }
         self.languages = languages
         self.target = target
+        conversation = Conversation(spoken: languages, target: target)
         system = Self.system(for: languages, into: target)
+        let keep = Set(conversation?.languages ?? [target])
+        translators = translators.filter { keep.contains($0.key) }
+    }
+
+    /// Which way a piece goes, in a two-way conversation; nil when only the
+    /// listener is listened for.
+    public func direction(_ text: String) -> Direction? {
+        guard let conversation else { return nil }
+        let guess = detector.guess(text, languages: conversation.languages)
+        let from = conversation.source(of: text, guess: guess.map { ($0.code, $0.confidence) }, last: lastLanguage)
+        lastLanguage = from
+        return Direction(from: from, into: conversation.other(from))
     }
 
     public func setRecognitionModel(_ model: RecognitionModel) {
@@ -84,6 +104,14 @@ public actor Linguist {
     private static func system(for spoken: [String], into target: String) -> String {
         Prompts.translate(into: name(target)) + (spoken.isEmpty ? "" : Prompts.speakers(
             Languages.list(spoken, names: RecognitionModel.whisper.languageNames)))
+    }
+
+    /// The instructions for translating into `into`: one way round, the
+    /// listener's as always; both ways, each side's, naming the other's
+    /// language as the one spoken.
+    private func instructions(into: String) -> String {
+        guard let conversation else { return system }
+        return Self.system(for: [conversation.other(into)], into: into)
     }
 
     static func name(_ code: String) -> String {
@@ -97,23 +125,27 @@ public actor Linguist {
 
     // MARK: translation
 
-    /// `text` in the listener's language; `brief` asks a general model for the gist only, to
+    /// `text` in the listener's language, or, in a two-way conversation, the
+    /// way `direction` says; `brief` asks a general model for the gist only, to
     /// catch up a backlog (TranslateGemma takes no instructions).
-    public func translate(_ text: String, brief: Bool = false) throws -> String {
+    public func translate(_ text: String, brief: Bool = false, direction: Direction? = nil) throws -> String {
         if let concern = TranslationQuality.concern(source: text) { throw UnclearTranslation(concern) }
         let text = Clock.normalise(text)
-        let language = source(of: text)
+        let language = direction?.from ?? source(of: text)
+        let into = direction?.into ?? target
         if history.count >= 2 * contextPieces { history.removeFirst(history.count - contextPieces) }
         let prompt = try context.tokenizer.applyChatTemplate(
-            messages: messages(text, language, brief), tools: nil,
+            messages: messages(text, language, into, brief), tools: nil,
             additionalContext: ["enable_thinking": false])  // Gemma 4 otherwise reasons aloud: seconds a line
 
         try Task.checkCancellation()
+        var translator = try translators[into] ?? PromptCache(context.model)
+        defer { translators[into] = translator }
         let fresh = try translator.prepare(for: prompt)
         // English seldom needs three times the tokens of its source; a cap keeps
         // an aside from being spoken and the listener from falling behind.
         // Other languages cost a tokenizer more per word than English does.
-        let factor = target == "en" ? 3 : 4
+        let factor = into == "en" ? 3 : 4
         let cap = max(24, factor * context.tokenizer.encode(text: text, addSpecialTokens: false).count)
         var iterator = try TokenIterator(input: LMInput(tokens: MLXArray(fresh)), model: context.model,
                                          cache: translator.kv, parameters: GenerateParameters(maxTokens: cap, temperature: 0))
@@ -135,7 +167,12 @@ public actor Linguist {
         if let concern = TranslationQuality.concern(source: text, translation: out) {
             throw UnclearTranslation(concern)
         }
-        history.append((text, out, language))
+        // Both ways round, a piece that came back unchanged was the other side
+        // speaking and is asked again the other way: kept, it would teach the
+        // model the wrong pair. One that didn't says who has the floor.
+        if let direction, echoes(text, out) { return out }
+        history.append((text, out, language, into))
+        if let direction { lastLanguage = direction.from }
         return out
     }
 
@@ -173,23 +210,24 @@ public actor Linguist {
         return out.trimmingCharacters(in: CharacterSet(charactersIn: "\"“” ")).trimmingCharacters(in: .whitespaces)
     }
 
-    private func messages(_ text: String, _ language: String, _ brief: Bool) -> [[String: any Sendable]] {
+    private func messages(_ text: String, _ language: String, _ target: String,
+                          _ brief: Bool) -> [[String: any Sendable]] {
         switch model.style {
         case .translateGemma:
             // Its template: each turn names the source language; earlier pieces
             // are earlier turns. A piece kept as context because it was already
             // in the listener's language can't be "translated" into itself, so
-            // only translated pieces go in.
-            let target = self.target
-            func turn(_ text: String, _ language: String) -> [String: any Sendable] {
+            // only translated pieces go in. Both ways round, each turn names
+            // its own pair, so the other side's pieces are context too.
+            func turn(_ text: String, _ language: String, _ into: String) -> [String: any Sendable] {
                 ["role": "user", "content": [["type": "text", "source_lang_code": language,
-                                               "target_lang_code": target, "text": text] as [String: any Sendable]]]
+                                               "target_lang_code": into, "text": text] as [String: any Sendable]]]
             }
             var messages: [[String: any Sendable]] = []
-            for piece in history where piece.language != target {
-                messages += [turn(piece.source, piece.language), ["role": "assistant", "content": piece.target]]
+            for piece in history where piece.language != piece.into {
+                messages += [turn(piece.source, piece.language, piece.into), ["role": "assistant", "content": piece.target]]
             }
-            return messages + [turn(text, language)]
+            return messages + [turn(text, language, target)]
         case .euroLLM:
             // Its training format, one piece at a time: earlier pieces as
             // context made a model this small echo them.
@@ -197,8 +235,10 @@ public actor Linguist {
             return [["role": "user",
                      "content": "Translate the following \(from) source text to \(into):\n\(from): \(text)\n\(into): "]]
         case .instructions:
-            var messages: [[String: any Sendable]] = [["role": "system", "content": system]]
-            for piece in history {
+            // The instructions name one language to work into, so only pieces
+            // that went the same way are earlier turns.
+            var messages: [[String: any Sendable]] = [["role": "system", "content": instructions(into: target)]]
+            for piece in history where piece.into == target {
                 messages.append(["role": "user", "content": Prompts.piece(piece.source, brief: false, into: Self.name(target))])
                 messages.append(["role": "assistant", "content": piece.target])
             }
@@ -224,7 +264,7 @@ public actor Linguist {
 
     /// Keep a piece that needed no translation as context for the ones that do.
     public func remember(_ text: String) {
-        history.append((text, text, target))
+        history.append((text, text, target, target))
         if history.count > 2 * contextPieces { history.removeFirst(history.count - contextPieces) }
     }
 
@@ -236,6 +276,11 @@ public actor Linguist {
     /// Read every prompt's instructions once, so the first real piece doesn't pay for it.
     public func warmUp() throws {
         _ = try translate(target == "de" ? "Dzień dobry, jak się masz?" : "Hallo, wie geht's?")
+        if let guest = conversation?.guest {  // and the other way round
+            let from = guest == "de" ? "pl" : "de"
+            _ = try translate(guest == "de" ? "Dzień dobry, jak się masz?" : "Hallo, wie geht's?",
+                              direction: Direction(from: from, into: guest))
+        }
         if model.judges { _ = try complete("Hallo") }
         forget()
     }
@@ -256,9 +301,11 @@ public actor Linguist {
     /// language they understand; a language not spoken here (if restricted)
     /// is misheard. The text's own signs come first, then Apple's language
     /// detector.
+    /// Both ways round, the listener's language is interpreted too: only a
+    /// language neither side speaks is turned away.
     public func gate(_ text: String) -> Silence? {
         let guess = detector.guess(text, languages: detectionLanguages)
-        if let guess, guess.code == target, guess.confidence >= 0.6 {
+        if conversation == nil, let guess, guess.code == target, guess.confidence >= 0.6 {
             // English has no letters outside ASCII: two of them and the
             // detector's "English" is a misreading.
             let foreign = text.filter { $0.isLetter && !$0.isASCII }.count
@@ -287,6 +334,18 @@ public actor Linguist {
         let margin = logits[MLXArray(yes)].max() - logits[MLXArray(no)].max()
         return Double(sigmoid(margin).item(Float.self))
     }
+}
+
+/// Which way a piece goes in a two-way conversation: from the language it is
+/// in to the other side's.
+public struct Direction: Equatable, Sendable {
+    public let from: String
+    public let into: String
+    public init(from: String, into: String) {
+        self.from = from
+        self.into = into
+    }
+    public var reversed: Direction { Direction(from: into, into: from) }
 }
 
 struct UnclearTranslation: LocalizedError {

@@ -97,11 +97,28 @@ public final class LiveSession {
     public var spoken: [String] { languages.filter { $0 != target } }
     public var anyLanguage: Bool { spoken.isEmpty }
 
+    /// Exactly one language spoken here beside the listener's: a two-way
+    /// conversation, each side interpreted into the other's language, with
+    /// no stopping or swapping between turns.
+    public var conversation: Conversation? { Conversation(spoken: spoken, target: target) }
+
+    /// Apple's echo canceller, on the phone, in a two-way conversation: the
+    /// voice speaks the guest's language too, from the speaker, and would be
+    /// heard and sent back. One way round it stays off: the voice speaks the
+    /// listener's language, which the gate keeps quiet, usually into
+    /// headphones, and voice processing would change the capture the AirPods
+    /// handover and automatic gain were tuned on.
+    public var echoCancellation: Bool { conversation != nil }
+
+    /// The languages speech recognition should expect: both sides' in a
+    /// conversation, else those spoken here.
+    private var heard: [String] { conversation?.languages ?? spoken }
+
     private func applyLanguages() {
-        let (spoken, target) = (spoken, target)
+        let (spoken, target, heard) = (spoken, target, heard)
         voice?.language = target
         Task { [recognizer, linguist] in
-            await recognizer?.setLanguages(spoken)
+            await recognizer?.setLanguages(heard)
             await linguist?.setLanguages(spoken, target: target)
         }
     }
@@ -240,7 +257,7 @@ public final class LiveSession {
             }
             if recognizer == nil {
                 phase = .loading("Loading speech recognition…")
-                let loaded = try await Recognizer.load(model: recognitionModel, languages: spoken) { fraction in
+                let loaded = try await Recognizer.load(model: recognitionModel, languages: heard) { fraction in
                     Task { @MainActor in
                         if self.active, self.preparationID == preparation, self.recognizer == nil, case .loading = self.phase {
                             self.phase = .loading(fraction < 1
@@ -267,7 +284,7 @@ public final class LiveSession {
             try Task.checkCancellation()
             phase = .loading("Warming up…")
             try await linguist?.warmUp()
-            await recognizer?.setLanguages(spoken)
+            await recognizer?.setLanguages(heard)
             await linguist?.setLanguages(spoken, target: target)
             await linguist?.setRecognitionModel(recognitionModel)
             try Task.checkCancellation()
@@ -334,7 +351,8 @@ public final class LiveSession {
                     continuation.yield(event)
                 }
             } else {
-                try pipeline.start(microphone: microphone, speaker: speaker) { event in
+                try pipeline.start(microphone: microphone, speaker: speaker,
+                                   echoCancellation: echoCancellation) { event in
                     continuation.yield(event)
                 }
             }
@@ -353,7 +371,7 @@ public final class LiveSession {
         }
         notice = nil
         #if os(iOS)
-        inputDescription = PhoneAudio.inputDescription
+        inputDescription = PhoneAudio.inputDescription + (pipeline.echoCancelling ? " · echo cancelled" : "")
         if PhoneAudio.Input(microphone).usesHeadphones && !PhoneAudio.inputIsHeadphones {
             notice = "No headphone microphone is connected, so the \(ThisDevice.name)'s is listening."
         }
@@ -591,7 +609,7 @@ public final class LiveSession {
                 $0.translation = translation
                 if why == .understood { $0.language = self.target }
             }
-        case .interpreted(let indices, let translation, _, let lags, let brief, let pace):
+        case .interpreted(let indices, let translation, _, let lags, let brief, let pace, let into):
             let ids = indices.compactMap { lineIDs[$0] }
             guard let first = ids.first else { return }
             // Merged pieces become one line, under the first.
@@ -600,6 +618,9 @@ public final class LiveSession {
             update(first) {
                 $0.source = ([$0.source] + merged).joined(separator: " ")
                 $0.language = Self.language(of: $0.source) ?? $0.language
+                if let into {  // two-way: the side it came from, as decided
+                    $0.language = self.conversation?.other(into) ?? $0.language
+                }
                 $0.translation = translation
                 $0.lag = lags.max()
                 $0.brief = brief
