@@ -97,6 +97,20 @@ failed. Signed with a free (personal) team, an install stops opening seven
 days after it was built, so run it again within the week; it prints the
 date. Installing over the old app keeps its models and data.
 
+To have the Mac do that by itself, whenever a device is on the same Wi-Fi
+(or plugged in) and has under three days of signing left:
+
+    apple/iOS/auto-refresh-agent.sh install   # a launchd agent, checking every 30 minutes
+    apple/iOS/auto-refresh-agent.sh status    # when each device's app expires; the log's end
+    apple/iOS/auto-refresh-agent.sh uninstall
+
+It runs `auto-refresh.sh`, which builds once, makes Xcode issue a fresh
+seven-day profile if it reused one about to run out, installs with
+`install-devices.sh --no-build`, and posts a notification. When a device
+can't be reached within a day of expiring, it says so. The device has to
+have been paired by cable once, and the Archive drive isn't needed (the
+last build's VAD model is kept).
+
 The phone uses one audio engine for capture and playback. Delayed startup
 notifications with an unchanged route do not stop Live; actual device/format
 changes, stopped engines, interruptions and media resets still ask for a
