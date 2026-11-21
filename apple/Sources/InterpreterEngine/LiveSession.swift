@@ -102,6 +102,14 @@ public final class LiveSession {
     /// no stopping or swapping between turns.
     public var conversation: Conversation? { Conversation(spoken: spoken, target: target) }
 
+    /// Apple's echo canceller, on the phone, in a two-way conversation: the
+    /// voice speaks the guest's language too, from the speaker, and would be
+    /// heard and sent back. One way round it stays off: the voice speaks the
+    /// listener's language, which the gate keeps quiet, usually into
+    /// headphones, and voice processing would change the capture the AirPods
+    /// handover and automatic gain were tuned on.
+    public var echoCancellation: Bool { conversation != nil }
+
     /// The languages speech recognition should expect: both sides' in a
     /// conversation, else those spoken here.
     private var heard: [String] { conversation?.languages ?? spoken }
@@ -343,7 +351,8 @@ public final class LiveSession {
                     continuation.yield(event)
                 }
             } else {
-                try pipeline.start(microphone: microphone, speaker: speaker) { event in
+                try pipeline.start(microphone: microphone, speaker: speaker,
+                                   echoCancellation: echoCancellation) { event in
                     continuation.yield(event)
                 }
             }
@@ -362,7 +371,7 @@ public final class LiveSession {
         }
         notice = nil
         #if os(iOS)
-        inputDescription = PhoneAudio.inputDescription
+        inputDescription = PhoneAudio.inputDescription + (pipeline.echoCancelling ? " · echo cancelled" : "")
         if PhoneAudio.Input(microphone).usesHeadphones && !PhoneAudio.inputIsHeadphones {
             notice = "No headphone microphone is connected, so the \(ThisDevice.name)'s is listening."
         }

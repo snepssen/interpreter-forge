@@ -20,6 +20,22 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(conversation?.other("en"), "pl")
     }
 
+    /// Echo cancellation follows the mode: on both ways round, off one way.
+    @MainActor func testEchoCancellationIsAskedForOnlyInAConversation() {
+        let session = LiveSession()
+        let (languages, target) = (session.languages, session.target)
+        defer { session.target = target; session.languages = languages }
+        session.target = "en"
+        session.languages = ["en", "pl"]
+        XCTAssertNotNil(session.conversation)
+        XCTAssertTrue(session.echoCancellation)
+        session.languages = ["en", "pl", "hu"]
+        XCTAssertNil(session.conversation)
+        XCTAssertFalse(session.echoCancellation)
+        session.languages = ["en"]
+        XCTAssertFalse(session.echoCancellation)
+    }
+
     func testTheTextsOwnSignsComeFirst() {
         // Polish letters or everyday words: the guest, whatever the detector says.
         XCTAssertEqual(polish.source(of: "Właśnie tak", guess: ("en", 0.9), last: "en"), "pl")

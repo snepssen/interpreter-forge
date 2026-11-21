@@ -89,24 +89,78 @@ public final class Microphone: AudioSource, @unchecked Sendable {
     public var framesReceived: Int { counting.withLock { frames } }
     /// Evens out loud and quiet speakers; touched only on the tap's thread.
     private var autoGain = AutoGain()
+    /// Apple's echo canceller is on for this capture.
+    public private(set) var echoCancelling = false
+    /// Convert only the first input channel; set before the tap starts.
+    private var firstChannel = false
 
-    public init(device: String? = nil, engine sharedEngine: AVAudioEngine? = nil) throws {
+    /// `echoCancellation` asks for Apple's echo canceller, as companion-forge's
+    /// `Duplex` has it: voice processing on the engine's input node, which
+    /// subtracts what the same engine is playing. So the voice must go out
+    /// through this engine, the one-engine phone design; the microphone is
+    /// made before the speaker attaches its player, as switching it on
+    /// rebuilds both I/O units and must come before anything is connected.
+    /// iPhone only: on a Mac companion-forge found its microphone side
+    /// delivered nothing, and the Mac's capture and playback are two engines.
+    public init(device: String? = nil, engine sharedEngine: AVAudioEngine? = nil, echoCancellation: Bool = false) throws {
         audioEngine = sharedEngine ?? AVAudioEngine()
         #if os(macOS)
         if let device, let id = AudioDevices.find(device, input: true) {
             try AudioDevices.use(id, on: engine.inputNode)
         }
+        #else
+        if echoCancellation { echoCancelling = Self.cancelEcho(on: engine) }
         #endif
     }
+
+    #if os(iOS)
+    /// Voice processing on, or, if the route refuses it, the capture as it
+    /// was: the pipeline's own check for its voice coming back still holds.
+    private static func cancelEcho(on engine: AVAudioEngine) -> Bool {
+        do {
+            try engine.inputNode.setVoiceProcessingEnabled(true)
+        } catch {
+            audioLog("echo cancellation unavailable: \(error.localizedDescription)")
+            return false
+        }
+        let input = engine.inputNode
+        // Left alone it turns every other app's sound down while it listens.
+        input.voiceProcessingOtherAudioDuckingConfiguration =
+            AVAudioVoiceProcessingOtherAudioDuckingConfiguration(enableAdvancedDucking: false, duckingLevel: .min)
+        // The microphone already has its own automatic gain (AutoGain), tuned
+        // for a room and for AirPods; a second one ahead of it would pump.
+        input.isVoiceProcessingAGCEnabled = false
+        do {
+            // Wired in the voice-processing output's own format, as
+            // companion-forge does: left to connect itself, the output unit
+            // can fail to initialise.
+            let output = engine.outputNode.inputFormat(forBus: 0)
+            try objc { engine.connect(engine.mainMixerNode, to: engine.outputNode, format: output) }
+        } catch {
+            audioLog("echo cancellation output not wired: \(error.localizedDescription)")
+            try? input.setVoiceProcessingEnabled(false)
+            return false
+        }
+        audioLog("echo cancellation on")
+        return true
+    }
+    #endif
 
     public func start() throws {
         let input = engine.inputNode
         let format = input.outputFormat(forBus: 0)
         // Before microphone access is granted the input has no format at all, and
         // a tap on it raises an exception rather than failing.
-        audioLog("microphone format \(format.sampleRate) Hz × \(format.channelCount)")
+        audioLog("microphone format \(format.sampleRate) Hz × \(format.channelCount), echo cancelling: \(echoCancelling)")
         guard format.sampleRate > 0, format.channelCount > 0 else { throw AudioFailure.noInput }
-        converter = AVAudioConverter(from: format, to: target)
+        // The echo canceller can hand over several channels, each the same
+        // cleaned voice, and a converter asked to downmix them gives silence
+        // (companion-forge, on a Mac): then the first alone is converted.
+        firstChannel = echoCancelling && format.channelCount > 1
+        let from = firstChannel
+            ? AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: format.sampleRate, channels: 1, interleaved: false)
+            : format
+        converter = from.flatMap { AVAudioConverter(from: $0, to: target) }
         guard converter != nil else { throw AudioFailure.noInput }
         do {
             try objc {
@@ -138,6 +192,15 @@ public final class Microphone: AudioSource, @unchecked Sendable {
     private func receive(_ pcm: AVAudioPCMBuffer) {
         counting.withLock { frames += Int(pcm.frameLength) }
         guard let converter else { return }
+        var pcm = pcm
+        if firstChannel {
+            guard let data = pcm.floatChannelData,
+                  let first = AVAudioPCMBuffer(pcmFormat: converter.inputFormat, frameCapacity: pcm.frameLength)
+            else { return }
+            first.frameLength = pcm.frameLength
+            first.floatChannelData![0].update(from: data[0], count: Int(pcm.frameLength))
+            pcm = first
+        }
         let capacity = AVAudioFrameCount(Double(pcm.frameLength) * 16_000 / pcm.format.sampleRate) + 32
         guard let out = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity) else { return }
         var fed = false

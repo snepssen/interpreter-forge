@@ -103,6 +103,8 @@ public final class Pipeline: @unchecked Sendable {
     public var level: Float { source?.buffer.level ?? 0 }
     /// Frames the microphone has delivered; nil for a recording.
     public var microphoneFrames: Int? { (source as? Microphone)?.framesReceived }
+    /// Apple's echo canceller is on for this capture.
+    public var echoCancelling: Bool { (source as? Microphone)?.echoCancelling ?? false }
     public var enginesRunning: Bool { audioEngines.allSatisfy(\.isRunning) }
     var audioEngines: [AVAudioEngine] {
         var engines = (source as? Microphone).map { [$0.audioEngine] } ?? []
@@ -130,7 +132,10 @@ public final class Pipeline: @unchecked Sendable {
     /// Session seconds; the stream clock, give or take the input's latency.
     func clock() -> Double { (ProcessInfo.processInfo.systemUptime - started) }
 
-    public func start(microphone device: String?, speaker output: String?,
+    /// `echoCancellation` asks for Apple's echo canceller on the phone's one
+    /// engine (a two-way conversation, where the voice comes out of the
+    /// speaker in a language the gate no longer keeps quiet); ignored on a Mac.
+    public func start(microphone device: String?, speaker output: String?, echoCancellation: Bool = false,
                       events: @escaping @Sendable (PipelineEvent) -> Void) throws {
         #if os(iOS)
         try PhoneAudio.activate(PhoneAudio.Input(device))
@@ -138,8 +143,8 @@ public final class Pipeline: @unchecked Sendable {
         do {
             #if os(iOS)
             let engine = AVAudioEngine()
-            try start(source: Microphone(device: device, engine: engine), speaker: output,
-                      audible: true, engine: engine, events: events)
+            try start(source: Microphone(device: device, engine: engine, echoCancellation: echoCancellation),
+                      speaker: output, audible: true, engine: engine, events: events)
             #else
             try start(source: Microphone(device: device), speaker: output, audible: true, events: events)
             #endif
