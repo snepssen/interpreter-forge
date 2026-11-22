@@ -6,7 +6,8 @@ name: parity
 on:
   push:
     paths: ["cases/**", "src/**", "tests/**", "apple/Sources/InterpreterCore/**", "apple/Sources/tccheck/**",
-            "android/core/**", "android/gradle/**", ".github/workflows/parity.yml"]
+            "android/core/**", "android/gradle/**", "apple/iOS/*.sh", "apple/scripts/**",
+            ".github/workflows/parity.yml"]
   pull_request:
   workflow_dispatch:
 
@@ -21,6 +22,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv run --frozen pytest -q tests/test_segmenter.py tests/test_clock.py tests/test_echoes.py tests/test_gate.py tests/test_catch_up.py
+      # Not parity, but it needs this same macOS runner: iOS/build-ios.sh against a
+      # fake Xcode, which failed unnoticed for want of a run.
+      - run: uv run --frozen pytest -q tests/test_build_ios.py
 
   swift:
     runs-on: macos-latest
