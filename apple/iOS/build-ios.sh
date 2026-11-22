@@ -21,19 +21,24 @@ cp "$VOICE" Resources/snepssen-polyglot.onnx
 cp "$VOICE.json" Resources/snepssen-polyglot.onnx.json
 echo "voice: $VOICE"
 rm -rf Resources/espeak-ng-data  # now voice-core's, in its resource bundle
-# models/ links to the Archive drive; when it is unplugged, keep the VAD from the last build.
+# models/ links into ~/Resources; if it is missing, keep the VAD from the last build.
 if [ -d "$REPO/models/" ]; then
   [ -s "$REPO/models/silero_vad.onnx" ] || curl -fsSL -o "$REPO/models/silero_vad.onnx" \
     https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx
   cp "$REPO/models/silero_vad.onnx" Resources/
 elif [ -s Resources/silero_vad.onnx ]; then
-  echo "warning: models/ is not reachable (Archive drive unplugged?); keeping Resources/silero_vad.onnx" >&2
+  echo "warning: models/ is not reachable; keeping Resources/silero_vad.onnx" >&2
 else
-  echo "error: models/ is not reachable (Archive drive unplugged?) and there is no Resources/silero_vad.onnx" >&2
+  echo "error: models/ is not reachable and there is no Resources/silero_vad.onnx" >&2
   exit 1
 fi
 
 xcodegen generate --quiet
+# The generated project is not in git, so Xcode would rebuild its pins from
+# whatever versions its package cache in .build last saw. Give it the package's
+# own Package.resolved instead: the same pins its tests and CI run against.
+SWIFTPM="Interpreter.xcodeproj/project.xcworkspace/xcshareddata/swiftpm"
+mkdir -p "$SWIFTPM" && cp "$IOS/../Package.resolved" "$SWIFTPM/Package.resolved"
 # Remove only the generated app, retaining dependency/build caches. A successful
 # no-op must never leave an old bundle available for installation.
 APP="$IOS/.build/Build/Products/Release-iphoneos/Interpreter.app"
