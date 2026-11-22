@@ -41,9 +41,14 @@ mkdir -p "$SWIFTPM" && cp "$IOS/../Package.resolved" "$SWIFTPM/Package.resolved"
 # no-op must never leave an old bundle available for installation.
 APP="$IOS/.build/Build/Products/Release-iphoneos/Interpreter.app"
 rm -rf "$APP"
+# REGISTER_DEVICE=<udid> builds for that device and lets Xcode add it to the
+# team, so a fresh profile covers it (auto-refresh.sh uses it when the profile
+# leaves out a device); otherwise any device.
+DEST=(-destination 'generic/platform=iOS')
+[ -n "${REGISTER_DEVICE:-}" ] && DEST=(-destination "id=$REGISTER_DEVICE" -allowProvisioningDeviceRegistration)
 build_app() {
   xcodebuild -project Interpreter.xcodeproj -scheme InterpreterPhone -configuration Release \
-    -destination 'generic/platform=iOS' -derivedDataPath "$IOS/.build" \
+    "${DEST[@]}" -derivedDataPath "$IOS/.build" \
     -allowProvisioningUpdates -skipMacroValidation -skipPackagePluginValidation "$@"
 }
 build_app build
