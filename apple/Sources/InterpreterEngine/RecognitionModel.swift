@@ -10,6 +10,14 @@ public enum RecognitionModel: String, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
     public var name: String { self == .parakeetUltra ? "Parakeet Ultra" : "Whisper large-v3 Turbo" }
     public static let whisperVariant = "large-v3-v20240930_626MB"
+    /// Hugging Face commits the downloads are pinned to, so a change upstream
+    /// can't reach the app unnoticed. Moving one is a deliberate edit here.
+    public static let parakeetRepo = "FluidInference/parakeet-ultra-coreml"
+    public static let parakeetRevision = "95eaa59a39d4394f047a4dc5cce480388a60d1b6"
+    static let whisperRepo = "argmaxinc/whisperkit-coreml"
+    static let whisperRevision = "0f63a7800b00dd0226abd051b906c246e1907482"
+    static let whisperTokenizerRepo = "openai/whisper-large-v3"
+    static let whisperTokenizerRevision = "06f233fe06e710322aca913c1bc4249a0d71fce1"
     public var download: Int64 { self == .parakeetUltra ? 630_000_000 : 626_000_000 }
     public var summary: String {
         self == .parakeetUltra

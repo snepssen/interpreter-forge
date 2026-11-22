@@ -7,7 +7,7 @@ from parakeet_mlx.audio import get_logmel
 from .types import Word
 
 MODELS = {
-    "v3": "mlx-community/parakeet-tdt-0.6b-v3",
+    "v3": "mlx-community/parakeet-tdt-0.6b-v3@ed2b7e8c15f9aaa0b5772e2efb986255eaef7e15",
     # moondream/parakeet-ultra (CC-BY-4.0), renamed into parakeet-mlx's layout
     "ultra": "pisar/parakeet-ultra-mlx@67b18a404d0dd8335fbab4fa2a0e54d5349f68de",
 }

@@ -24,8 +24,18 @@ public actor Recognizer {
             if RecognitionStore.complete(in: base) {
                 folder = RecognitionStore.whisperFolder
             } else {
-                folder = try await WhisperKit.download(variant: RecognitionModel.whisperVariant,
-                    downloadBase: base, progressCallback: { progress?($0.fractionCompleted) })
+                // WhisperKit.download always takes the newest commit, so fetch the
+                // pinned model and tokenizer into the layout it reads instead.
+                let hub = HubApiWrapper(downloadBase: base)
+                let snapshot = try await hub.snapshot(
+                    from: .init(id: RecognitionModel.whisperRepo),
+                    revision: RecognitionModel.whisperRevision,
+                    matching: ["openai_whisper-\(RecognitionModel.whisperVariant)/*"]) {
+                        progress?($0.fractionCompleted * 0.99)
+                    }
+                _ = try await hub.snapshot(from: .init(id: RecognitionModel.whisperTokenizerRepo),
+                    revision: RecognitionModel.whisperTokenizerRevision, matching: ["*.json"])
+                folder = snapshot.appending(path: "openai_whisper-\(RecognitionModel.whisperVariant)")
             }
             try Task.checkCancellation()
             progress?(1)
@@ -39,6 +49,7 @@ public actor Recognizer {
         if let progress { handler = { progress($0.fractionCompleted) } }
         // Only download progress should be presented as downloading. FluidAudio's
         // load callback also reports fractions (including 50%) for cached models.
+        ModelRegistry.revisionOverrides[RecognitionModel.parakeetRepo] = RecognitionModel.parakeetRevision
         let directory = try await AsrModels.download(version: .ultra, progressHandler: handler)
         progress?(1)
         let models = try await AsrModels.load(from: directory, version: .ultra)

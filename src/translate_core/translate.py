@@ -10,7 +10,9 @@ from .clock import normalise
 from .languages import names
 
 LOCAL_MODEL = Path(__file__).resolve().parents[2] / "models" / "qwen3-4b-instruct-2507-4bit"
-DEFAULT_MODEL = str(LOCAL_MODEL) if LOCAL_MODEL.exists() else "mlx-community/Qwen3-4B-Instruct-2507-4bit"
+# `repo@revision` pins the Hugging Face commit; the same one scripts/fetch-models.sh fetches.
+HUB_MODEL = "mlx-community/Qwen3-4B-Instruct-2507-4bit@50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b"
+DEFAULT_MODEL = str(LOCAL_MODEL) if LOCAL_MODEL.exists() else HUB_MODEL
 
 SYSTEM = """You are a live interpreter working into English.
 Each message is the next piece of someone else's speech, transcribed by speech recognition from a European language.
@@ -37,7 +39,8 @@ class LLMTranslator:
 
     def __init__(self, model_id: str = DEFAULT_MODEL, context: int = 3, max_tokens: int = 256,
                  languages: list[str] | None = None):
-        self.model, self.tokenizer = load(model_id)
+        repo, _, revision = model_id.partition("@")
+        self.model, self.tokenizer = load(repo, revision=revision or None)
         self.system = SYSTEM
         if spoken := [c for c in languages or [] if c != "en"]:
             self.system += (f"\nThe speakers use {names(spoken)}: read the transcript as that, even where "
