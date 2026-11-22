@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from . import audio
-from .asr import DEFAULT_MODEL as ASR_MODEL
+from .asr import DEFAULT_MODEL as ASR_MODEL, MODELS as ASR_MODELS
 from .segmenter import SegmenterConfig
 from .translate import DEFAULT_MODEL as MT_MODEL
 from .tts import DEFAULT_VOICE
@@ -33,7 +33,8 @@ def main() -> None:
 
     for s in (f, live):
         s.add_argument("--out", type=Path, help="run directory (default: runs/<name>; with several inputs, the parent)")
-        s.add_argument("--asr", default=ASR_MODEL)
+        s.add_argument("--asr", default=ASR_MODEL,
+                       help=f"recognizer: {', '.join(ASR_MODELS)}, or a Hugging Face id[@revision] or directory")
         s.add_argument("--mt", default=MT_MODEL)
         s.add_argument("--voice", type=Path, default=DEFAULT_VOICE)
         s.add_argument("--no-judge", action="store_true", help="segment on acoustics and punctuation alone")
