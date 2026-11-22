@@ -6,7 +6,11 @@ plugins {
     alias(libs.plugins.android.library)
 }
 
-val voiceCore = rootDir.resolve("../../voice-core")
+// voice-core at the revision apple/Package.resolved pins, fetched once into
+// build/ (scripts/voice-core.sh; VOICE_CORE=<checkout> to use your own), so
+// the data matches the Apple builds' and no sibling checkout is needed.
+val voiceCore = providers.exec { commandLine(rootDir.resolve("scripts/voice-core.sh").path) }
+    .standardOutput.asText.map { File(it.trim()) }
 
 android {
     namespace = "com.snepssen.voice"
@@ -33,11 +37,12 @@ android {
 }
 
 val voiceCoreAssets by tasks.registering(Copy::class) {
-    from(voiceCore.resolve("Sources/VoiceCore/Resources")) { include("espeak-ng-data/**") }
+    from(voiceCore.map { it.resolve("Sources/VoiceCore/Resources") }) { include("espeak-ng-data/**") }
     into(layout.buildDirectory.dir("voiceCoreAssets"))
+    doLast { check(destinationDir.resolve("espeak-ng-data/phontab").exists()) { "voice-core's espeak-ng-data did not arrive" } }
 }
 val voiceCoreFixtures by tasks.registering(Copy::class) {
-    from(voiceCore.resolve("Tests/VoiceCoreTests/Fixtures"))
+    from(voiceCore.map { it.resolve("Tests/VoiceCoreTests/Fixtures") })
     into(layout.buildDirectory.dir("voiceCoreFixtures/fixtures"))
 }
 // The polyglot voice, shipped in the app: the same newest export or release

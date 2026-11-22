@@ -31,10 +31,7 @@ for scheme in Interpreter tcrun; do
 done
 
 VAD="$REPO/models/silero_vad.onnx"
-if [ ! -s "$VAD" ]; then
-  mkdir -p "$REPO/models"
-  curl -fsSL -o "$VAD" https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx
-fi
+"$REPO/apple/scripts/silero-vad.sh" "$VAD"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"

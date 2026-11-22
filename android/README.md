@@ -20,6 +20,7 @@ engine design as the iPhone app, and the same voice, held to the same fixtures.
 The `voice` module mirrors voice-core and is meant to move there once the app
 is proven, so every Android app that speaks with snepssen gets it from one
 place, as the Apple ones do. Its espeak-ng data and parity fixtures are
-copied from a voice-core checkout beside interpreter-forge at build time, never
-kept twice; the speaking test takes the newest polyglot voice the way the
-Apple builds do (`../apple/scripts/polyglot-voice.sh`).
+copied at build time from voice-core at the revision `apple/Package.resolved`
+pins, fetched once into `build/` (`scripts/voice-core.sh`; set `VOICE_CORE` to
+a checkout to use your own), never kept twice; the speaking test takes the
+newest polyglot voice the way the Apple builds do (`../apple/scripts/polyglot-voice.sh`).

@@ -21,16 +21,14 @@ cp "$VOICE" Resources/snepssen-polyglot.onnx
 cp "$VOICE.json" Resources/snepssen-polyglot.onnx.json
 echo "voice: $VOICE"
 rm -rf Resources/espeak-ng-data  # now voice-core's, in its resource bundle
-# models/ links into ~/Resources; if it is missing, keep the VAD from the last build.
-if [ -d "$REPO/models/" ]; then
-  [ -s "$REPO/models/silero_vad.onnx" ] || curl -fsSL -o "$REPO/models/silero_vad.onnx" \
-    https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx
-  cp "$REPO/models/silero_vad.onnx" Resources/
-elif [ -s Resources/silero_vad.onnx ]; then
-  echo "warning: models/ is not reachable; keeping Resources/silero_vad.onnx" >&2
+# The VAD lives in models/, made here on a fresh clone. Where models/ is a link
+# whose target is gone (into ~/Resources, say), it goes straight in Resources/.
+if [ -L "$REPO/models" ] && [ ! -d "$REPO/models/" ]; then
+  echo "warning: models/ links to a folder that is not there; the VAD goes in Resources/ alone" >&2
+  "$IOS/../scripts/silero-vad.sh" Resources/silero_vad.onnx
 else
-  echo "error: models/ is not reachable and there is no Resources/silero_vad.onnx" >&2
-  exit 1
+  "$IOS/../scripts/silero-vad.sh" "$REPO/models/silero_vad.onnx"
+  cp "$REPO/models/silero_vad.onnx" Resources/
 fi
 
 xcodegen generate --quiet

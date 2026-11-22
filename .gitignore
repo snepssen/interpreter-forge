@@ -1,4 +1,5 @@
-models/
+# models/ is often a link into a shared folder; a link needs the slashless form.
+models
 runs/
 samples/*.wav
 .venv/

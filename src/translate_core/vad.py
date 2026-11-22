@@ -1,3 +1,4 @@
+import hashlib
 import urllib.request
 from pathlib import Path
 
@@ -6,7 +7,9 @@ import onnxruntime as ort
 
 from .audio import SAMPLE_RATE
 
-SILERO_URL = "https://raw.githubusercontent.com/snakers4/silero-vad/master/src/silero_vad/data/silero_vad.onnx"
+# The release apple/scripts/silero-vad.sh fetches too, not whatever master holds.
+SILERO_URL = "https://raw.githubusercontent.com/snakers4/silero-vad/v6.2/src/silero_vad/data/silero_vad.onnx"
+SILERO_SHA256 = "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"
 DEFAULT_PATH = Path(__file__).resolve().parents[2] / "models" / "silero_vad.onnx"
 
 
@@ -19,7 +22,12 @@ class SileroVAD:
     def __init__(self, path: Path = DEFAULT_PATH, on: float = 0.5, off: float = 0.35):
         if not path.exists():
             path.parent.mkdir(parents=True, exist_ok=True)
-            urllib.request.urlretrieve(SILERO_URL, path)
+            part = path.with_name(path.name + ".part")
+            urllib.request.urlretrieve(SILERO_URL, part)
+            if hashlib.sha256(part.read_bytes()).hexdigest() != SILERO_SHA256:
+                part.unlink()
+                raise RuntimeError("the fetched Silero VAD does not match its SHA-256")
+            part.replace(path)
         options = ort.SessionOptions()
         options.inter_op_num_threads = options.intra_op_num_threads = 1
         self._session = ort.InferenceSession(str(path), options, providers=["CPUExecutionProvider"])

@@ -24,6 +24,10 @@ def test_ios_never_installs_a_stale_product(tmp_path, mode, expected_calls, succ
     voice.parent.mkdir()
     voice.write_text("#!/bin/sh\nprintf '%s\\n' /tmp/snepssen-polyglot.onnx\n")
     voice.chmod(0o755)
+    # And the VAD: the stub writes the file it is asked for, as the real one does.
+    vad = ios.parent / "scripts" / "silero-vad.sh"
+    vad.write_text('#!/bin/sh\nmkdir -p "$(dirname "$1")" && echo vad > "$1"\n')
+    vad.chmod(0o755)
     app = ios / ".build/Build/Products/Release-iphoneos/Interpreter.app"
     app.mkdir(parents=True)
     (app / "Interpreter").write_text("stale app")
